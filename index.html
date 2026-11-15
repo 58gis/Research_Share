@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="description" content="リカーリングトピックの一覧とシード別の結果を閲覧できます。">
+<title>リカーリングトピック集計</title>
+<style>
+:root {
+  color-scheme: light;
+  --paper: #fff;
+  --ink: #161616;
+  --muted: #4a4a4a;
+  --line: #767676;
+  --gutter: clamp(14px, 3vw, 40px);
+  font: 14px/1.5 "Inter", "Noto Sans JP", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+::selection { background: var(--ink); color: var(--paper); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+body { margin: 0; height: 100dvh; min-height: 480px; display: flex; flex-direction: column; }
+header, .toolbar, .tabs, #message, #scopeBar, #schemaNotice, #conditionsBar, #datasetLine, footer {
+  padding-inline: var(--gutter);
+}
+header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding-block: 22px 16px;
+  border-bottom: 1px solid var(--ink);
+}
+h1 { margin: 0; font-size: 1.75rem; line-height: 1.25; letter-spacing: -.02em; }
+h2 { margin: 0; font-size: 1.25rem; line-height: 1.35; }
+p { margin: 0; }
+.source-file { margin-top: 5px; color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+button, select, input, summary, textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+button, select, input, summary { min-height: 34px; padding: 5px 10px; }
+button, summary { cursor: pointer; }
+button:hover:not(:disabled), summary:hover { border-color: var(--ink); text-decoration: underline; }
+button:disabled, input:disabled, select:disabled { color: var(--line); cursor: default; }
+input, textarea { caret-color: var(--ink); }
+input::placeholder { opacity: 1; color: var(--muted); }
+input[type="checkbox"] { min-height: 0; margin: 0; accent-color: var(--ink); }
+label { display: flex; align-items: center; gap: 8px; font-size: .86rem; }
+label > input[type="number"], label > select { max-width: 100%; }
+.primary { border-color: var(--ink); font-weight: 650; }
+.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding-block: 12px; }
+.search { flex: 1 1 240px; max-width: 420px; }
+#search { width: 100%; }
+#viewSwitcher { display: inline-flex; align-items: stretch; }
+#viewSwitcher button { border: 0; border-radius: 0; border-bottom: 2px solid transparent; padding-inline: 11px; }
+#viewSwitcher button[aria-pressed="true"] { border-bottom-color: var(--ink); font-weight: 700; }
+.toolbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding-block: 6px; border-bottom: 1px solid var(--line); }
+.tab-item { display: flex; align-items: center; flex-shrink: 0; border-bottom: 2px solid transparent; }
+.tab-item.active { border-bottom-color: var(--ink); }
+.tab-item button { border: 0; }
+.tab-item [role="tab"] { max-width: min(300px, 65vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-item.active [role="tab"] { font-weight: 650; }
+.tab-close { min-width: 34px; }
+#csvOptions, #columnsPanel { position: relative; }
+#csvMenu, #columnMenu, #filterPopup {
+  z-index: 8;
+  width: min(330px, calc(100vw - 28px));
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 12px;
+  background: var(--paper);
+}
+#csvMenu, #columnMenu { position: absolute; top: calc(100% + 6px); right: 0; }
+#csvMenu { display: grid; gap: 10px; }
+#csvMenu > label { justify-content: space-between; }
+#csvMenu > label:last-of-type { justify-content: flex-start; }
+#rowLimitLabel { display: flex; align-items: center; gap: 6px; }
+.row-stepper { display: grid; }
+.row-stepper button { min-height: 20px; padding: 0 6px; font-size: .8rem; }
+#rowLimit { appearance: textfield; }
+#rowLimit::-webkit-inner-spin-button, #rowLimit::-webkit-outer-spin-button { -webkit-appearance: none; }
+.column-actions, .filter-actions, .filter-pages { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.column-actions button, .filter-actions button, .filter-pages button { font-size: .86rem; }
+.column-help, #filterNote { color: var(--muted); font-size: .86rem; margin-block: 8px; }
+#columnList { max-height: min(310px, 35dvh); overflow: auto; }
+.column-setting { display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
+.column-setting label { flex: 1; min-width: 0; }
+.column-setting label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.column-setting input[type="number"] { width: 74px; }
+.unit { font-size: .86rem; }
+#datasetLine, #scopeBar, #message, #schemaNotice { font-size: .86rem; padding-block: 7px; }
+#datasetLine { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+#datasetScope { font-weight: 700; }
+#topicHint { color: var(--muted); }
+#scopeBar { display: flex; flex-wrap: wrap; gap: 8px; }
+#scopeBadge { font-weight: 650; }
+#schemaNotice { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-block: 1px solid var(--ink); }
+#message.error { border-block: 1px solid var(--ink); font-weight: 650; }
+body.topic-source #scopeBar, body.topic-source #count { display: none; }
+body.topic-source #message:not(.error) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+#conditionsBar { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 5px; }
+.condition-chip { display: flex; align-items: center; max-width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+.condition-chip span { padding: 3px 8px; max-width: min(360px, 70vw); max-height: 70px; overflow: auto; overflow-wrap: anywhere; font-size: .86rem; }
+.condition-chip button { min-height: 32px; border: 0; }
+main { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0 var(--gutter); }
+#empty { margin-block: auto; padding-block: 16px; max-width: 60ch; }
+#empty p { margin-block: 6px 12px; color: var(--muted); }
+#tableWrap { overflow: auto; flex: 1; border-top: 1px solid var(--ink); }
+#table { table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .93rem; font-variant-numeric: tabular-nums; }
+.topic-summary #table { min-width: 100%; }
+#table th, #table td { height: 38px; text-align: left; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+#table th { position: sticky; top: 0; z-index: 2; padding: 0; border-bottom: 1px solid var(--ink); background: var(--paper); }
+#table td { padding: 0 11px; border-bottom: 1px solid var(--line); }
+#table th:first-child, #table td:first-child { position: sticky; left: 0; text-align: center; color: var(--muted); background: var(--paper); }
+#table td:first-child { z-index: 1; }
+#table th:first-child { z-index: 3; }
+#table th button { border: 0; border-radius: 0; min-height: 34px; }
+#table th .sort-button { width: calc(100% - 34px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 3px 4px 11px; text-align: left; }
+#table th .filter-button { position: absolute; right: 8px; top: 0; bottom: 0; width: 26px; padding: 0; }
+#table th .filter-button.filtered { outline: 1px solid var(--ink); outline-offset: -3px; font-weight: 700; }
+.topic-summary #table th .filter-button { right: 2px; }
+#table th button:focus-visible, #table td:focus-visible { outline-offset: -3px; }
+#table tbody tr:hover td { border-bottom-color: var(--ink); }
+#table td.number { text-align: right; }
+.topic-button { min-height: 32px; padding: 3px 0; border: 0; border-radius: 0; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.topic-button:hover { text-decoration-thickness: 2px; }
+.match-rate { font-weight: 650; }
+.match-count { padding-left: 2px; font-size: .8rem; font-weight: 400; color: var(--muted); }
+.no-value { color: var(--muted); }
+.resize-handle { position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; touch-action: none; }
+.resize-handle::after { content: ""; position: absolute; right: 2px; top: 9px; bottom: 9px; border-right: 1px solid var(--line); }
+.resize-handle:focus-visible { outline-offset: -2px; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
+#cellDetails { max-height: 35vh; overflow: auto; border-top: 1px solid var(--ink); padding-block: 10px; }
+#cellDetailsHeader { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+#cellDetailsTitle { font-size: .93rem; overflow-wrap: anywhere; }
+#cellText { width: 100%; height: 90px; min-height: 54px; resize: vertical; white-space: pre-wrap; padding: 8px; }
+#cellCopyStatus { font-size: .86rem; }
+footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; padding-block: 9px; border-top: 1px solid var(--ink); color: var(--muted); font-size: .86rem; }
+#info { overflow-wrap: anywhere; }
+.page-status, .pages { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.pages button { min-height: 30px; }
+#filterPopup { position: fixed; z-index: 9; max-height: calc(100dvh - 16px); overflow: auto; }
+#filterTitle { margin: 0 0 8px; overflow-wrap: anywhere; }
+#filterSearch { width: 100%; }
+.filter-actions, .filter-pages { margin-block: 8px; }
+#filterValues { max-height: 200px; overflow: auto; border-block: 1px solid var(--line); padding: 4px 2px; }
+#filterValues label { padding-block: 4px; }
+#filterValues label span { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+#filterValues small { color: var(--muted); }
+#dropOverlay { display: none; position: fixed; inset: 8px; z-index: 10; place-items: center; background: var(--paper); border: 2px dashed var(--ink); pointer-events: none; }
+body.dragging #dropOverlay { display: grid; }
+#topicDialog {
+  width: min(830px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  margin: auto;
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  overflow: auto;
+}
+#topicDialog::backdrop { background: var(--paper); }
+.topic-dialog-header { position: sticky; top: 0; z-index: 3; display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--ink); background: var(--paper); }
+#topicTitle { overflow-wrap: anywhere; }
+#topicSubtitle { margin-top: 4px; color: var(--muted); font-size: .86rem; }
+#topicContent { display: grid; gap: 18px; padding: 16px 20px 20px; }
+.topic-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.topic-metrics dt, .topic-detail-note { color: var(--muted); font-size: .86rem; }
+.topic-metrics dd { margin: 3px 0 0; font-size: 1.25rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.topic-section h3 { margin: 0 0 5px; font-size: 1rem; }
+.topic-section p { overflow-wrap: anywhere; }
+.topic-detail-note { margin-bottom: 5px; }
+.word-support { display: flex; flex-wrap: wrap; gap: 5px 12px; list-style: none; margin: 0; padding: 0; }
+.word-support small { margin-left: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.seed-table-wrap { overflow: auto; }
+.seed-table { width: 100%; min-width: 440px; border-collapse: collapse; font-size: .93rem; font-variant-numeric: tabular-nums; }
+.seed-table th, .seed-table td { padding: 7px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.seed-table th { border-bottom-color: var(--ink); }
+.seed-table th:nth-child(-n+3) { white-space: nowrap; }
+.seed-table td:last-child { overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  header { align-items: flex-start; padding-block: 15px 12px; }
+  h1 { font-size: 1.5rem; }
+  .toolbar { padding-block: 8px; gap: 6px; }
+  .toolbar-actions { margin-left: 0; }
+  .search { max-width: none; flex-basis: 100%; order: 2; }
+  #csvMenu, #columnMenu { position: fixed; top: auto; left: var(--gutter); right: auto; margin-top: 6px; max-height: 55dvh; overflow: auto; }
+  .topic-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topic-dialog-header, #topicContent { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div><h1 id="pageTitle">リカーリングトピック集計</h1><p class="source-file">20260301_62_001_リカーリングトピック集計.csv</p></div>
+  <button id="downloadDataset" hidden>集計CSVを保存</button>
+</header>
+<div id="tabs" class="tabs" role="tablist" aria-label="開いているCSV" hidden></div>
+<div class="toolbar">
+  <div id="viewSwitcher" role="group" aria-label="表示形式" hidden>
+    <button id="summaryView" aria-pressed="true">トピック一覧</button>
+    <button id="rawView" aria-pressed="false">全列の表</button>
+  </div>
+  <label class="search"><input id="search" type="search" placeholder="トピック名・語句を検索" aria-label="全列から検索" disabled></label>
+  <div class="toolbar-actions">
+    <button id="restoreDataset" hidden>集計CSVを表示</button>
+    <button id="open">CSVを開く</button>
+  <details id="csvOptions">
+    <summary>読み込み設定</summary>
+    <div id="csvMenu">
+      <label>読み込む範囲<select id="readMode"><option value="all">全行</option><option value="limited">先頭のみ</option></select></label><div id="rowLimitLabel" hidden><input id="rowLimit" type="number" min="1" max="1000000" step="any" value="100" style="width:95px" aria-label="読み込むデータ行数"><span class="row-stepper"><button id="moreRows" aria-label="読み込む行数を100行増やす" title="100行増やす">▲</button><button id="fewerRows" aria-label="読み込む行数を100行減らす" title="100行減らす">▼</button></span>行</div>
+<label>文字コード<select id="encoding"><option value="auto">自動判定</option><option value="utf-8">UTF-8</option><option value="shift_jis">Shift_JIS / CP932</option><option value="euc-jp">EUC-JP</option><option value="utf-16le">UTF-16 LE</option><option value="utf-16be">UTF-16 BE</option></select></label>
+<label>区切り<select id="delimiter"><option value="auto">自動判定</option><option value=",">カンマ</option><option value="tab">タブ</option><option value=";">セミコロン</option></select></label>
+<label><input id="header" type="checkbox" checked>先頭行を見出しにする</label>
+      <button id="reload" disabled>再読み込み</button><input type="file" id="reloadFile" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden><input type="file" id="file" multiple accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden>
+    </div>
+  </details>
+  <details id="columnsPanel"><summary>列の設定</summary><div id="columnMenu"><div class="column-actions"><button id="showAll">すべて表示</button><button id="hideAll">すべて非表示</button><button id="resetWidths">幅をリセット</button></div><div class="column-help">見出しの右端で列幅を調整できます。ダブルクリックすると内容に合わせます。</div><div id="columnList">ファイルを開くと設定できます。</div></div></details>
+    <button id="clearFilters" hidden>列フィルタを解除</button>
+  </div>
+</div>
+<div id="message" role="status" aria-live="polite" hidden></div>
+<div id="scopeBar" hidden><span id="scopeBadge"></span><span id="scopeNote"></span></div>
+<div id="schemaNotice" hidden role="status"><span id="schemaNoticeText"></span><button id="dismissSchemaNotice">閉じる</button></div>
+<div id="conditionsBar" aria-label="適用中の絞り込み条件" hidden></div>
+<div id="datasetLine" hidden>
+  <span id="datasetScope" role="status"></span>
+  <span id="topicHint">トピック名を選ぶとシード別の結果が開きます。</span>
+</div>
+<main id="main" aria-busy="false">
+  <div id="empty">
+    <h2 id="emptyTitle">CSVを開く</h2>
+    <p id="emptyNote">「CSVを開く」からファイルを選ぶか、ここにドロップしてください。</p>
+    <button id="openDataset" class="primary" hidden>集計CSVを読み込む</button>
+  </div>
+<div id="tableWrap" hidden tabindex="0" role="region" aria-label="CSVの表"><table id="table" aria-label="CSVデータ"><colgroup id="colgroup"></colgroup><thead id="head"></thead><tbody id="body"></tbody></table></div><aside id="cellDetails" aria-labelledby="cellDetailsTitle" hidden><div id="cellDetailsHeader"><h2 id="cellDetailsTitle">セルの内容</h2><div><button id="copyCell">内容をコピー</button><button id="closeCell">閉じる</button></div></div><textarea id="cellText" readonly aria-label="セルの全文" spellcheck="false"></textarea><span id="cellCopyStatus" role="status"></span></aside></main>
+<footer id="footer" hidden>
+  <span id="info"></span>
+  <div class="page-status">
+    <span id="count"></span>
+    <span>150行 / ページ</span>
+    <div class="pages" id="pagination" hidden>
+      <button id="prev" disabled>前へ</button>
+      <span id="page"></span>
+      <button id="next" disabled>次へ</button>
+    </div>
+  </div>
+</footer>
+<section id="filterPopup" role="dialog" aria-labelledby="filterTitle" hidden><h2 id="filterTitle">列フィルタ</h2><input id="filterSearch" type="search" placeholder="候補を検索…" aria-label="フィルタ候補を検索"><div class="filter-actions"><button id="filterSelectAll">すべて選択</button><button id="filterSelectNone">すべて解除</button></div><div id="filterValues"></div><div class="filter-pages"><button id="filterPrev" aria-label="前の候補">←</button><span id="filterCount" role="status"></span><button id="filterNext" aria-label="次の候補">→</button></div><div id="filterNote">候補は読み込み範囲内で、全体検索と他列の条件を反映します。<br>同じ列は「いずれか」、別の列は「両方」です。<br>すべて選択／解除は検索中も候補全体が対象です。</div><div class="filter-actions"><button id="filterApply" class="primary">適用</button><button id="filterClear">この列を解除</button><button id="filterCancel">キャンセル</button></div></section>
+<div id="dropOverlay">ここにドロップして開く</div>
+<dialog id="topicDialog" aria-labelledby="topicTitle">
+  <div class="topic-dialog-header">
+    <div><h2 id="topicTitle"></h2><p id="topicSubtitle"></p></div>
+    <button id="closeTopic" autofocus>閉じる</button>
+  </div>
+  <div id="topicContent"></div>
+</dialog>
+<noscript>CSVを表示するにはJavaScriptを有効にしてください。</noscript>
+<script>
+'use strict';
+// Parser and worker share no libraries; this file works directly via file://.
+function parseCSV(text, delimiter, limit = Infinity, partial = false) {
+  const rows = []; let row = [], cell = '', quoted = false, afterQuote = false;
+  function endCell() { row.push(cell); cell = ''; afterQuote = false; }
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else { quoted = false; afterQuote = true; } }
+      else cell += c;
+    } else if (c === delimiter) endCell();
+    else if (c === '\n' || c === '\r') {
+      endCell(); rows.push(row); row = [];
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      if (rows.length >= limit) return rows;
+    } else if (c === '"' && cell === '' && !afterQuote) quoted = true;
+    else {
+      if (afterQuote) { if (c === ' ' || c === '\t') continue; throw Error('閉じ引用符の後に不正な文字があります。区切り文字を確認してください。'); }
+      cell += c;
+    }
+  }
+  if (partial) return rows;
+  if (quoted) throw Error('引用符が閉じていません。CSVの内容または区切り文字を確認してください。');
+  if (cell !== '' || row.length || afterQuote) { endCell(); rows.push(row); }
+  return rows;
+}
+function detectDelimiter(text, partial = false) {
+  let best = ',', score = -1;
+  for (const d of [',', '\t', ';']) {
+    try {
+      const rows = parseCSV(text, d, 20, partial).filter(r => r.some(c => c !== ''));
+      const widths = new Map(); rows.forEach(r => widths.set(r.length, (widths.get(r.length) || 0) + 1));
+      for (const [width, count] of widths) {
+        const s = width > 1 ? count / rows.length * 100 + Math.min(width, 100) / 100 : 0;
+        if (s > score) { score = s; best = d; }
+      }
+    } catch (_) { /* A candidate delimiter can make valid quoted CSV look invalid. */ }
+  }
+  return best;
+}
+function decodeBytes(bytes, requested, partial = false) {
+  let encoding = requested;
+  if (encoding === 'auto') {
+    if (bytes[0] === 255 && bytes[1] === 254) encoding = 'utf-16le';
+    else if (bytes[0] === 254 && bytes[1] === 255) encoding = 'utf-16be';
+    else {
+      // ponytail: BOM-less legacy encodings are heuristic; expose manual override for ambiguous bytes.
+      encoding = ['utf-8', 'shift_jis', 'euc-jp'].find(e => {
+        try { new TextDecoder(e, {fatal:true}).decode(bytes, {stream:partial}); return true; } catch (_) { return false; }
+      }) || 'utf-8';
+    }
+  }
+  let text, warning = '';
+  try { text = new TextDecoder(encoding, {fatal:true}).decode(bytes, {stream:partial}); }
+  catch (_) { text = new TextDecoder(encoding).decode(bytes, {stream:partial}); warning = '変換できない文字があります。文字コードを切り替えてください。'; }
+  return {text: text.replace(/^\uFEFF/, ''), encoding, warning};
+}
+async function readCSVFile(m, isCurrent) {
+  const maximum = 50 * 1024 * 1024;
+  if (m.limit && (!Number.isInteger(m.limit) || m.limit < 1 || m.limit > 1000000)) throw Error('読み込む行数は1〜1,000,000で指定してください。');
+  const limit = m.limit > 0 ? m.limit + (m.header ? 1 : 0) : Infinity;
+  if (!m.limit && m.file.size > maximum) throw Error('全行読み込みは50 MBまでです。「先頭のみ」を選んでください。');
+  let end = m.limit ? Math.min(m.file.size, 65536) : m.file.size;
+  while (true) {
+    const buffer = await (m.limit ? m.file.slice(0, end) : m.file).arrayBuffer();
+    if (!isCurrent()) return null;
+    const partial = m.limit > 0 && end < m.file.size;
+    const decoded = decodeBytes(new Uint8Array(buffer), m.encoding, partial);
+    const delimiter = m.delimiter === 'auto' ? detectDelimiter(decoded.text, partial) : m.delimiter === 'tab' ? '\t' : m.delimiter;
+    const rows = parseCSV(decoded.text, delimiter, limit, partial);
+    if (!partial || rows.length >= limit) return {rows, encoding:decoded.encoding, delimiter, warning:decoded.warning, limit:m.limit || 0, bytesRead:end};
+    if (end >= maximum) throw Error('指定行数に達する前に50 MBを読み込みました。行数を減らすか、ファイルを分割してください。');
+    // ponytail: bounded prefix reads double in size; total IO stays below three times the final prefix (including a capped last read).
+    end = Math.min(m.file.size, end * 2, maximum);
+  }
+}
+function compareNumericStrings(x, y) {
+  const a = /^(-?)(\d+)(?:\.(\d+))?$/.exec(x), b = /^(-?)(\d+)(?:\.(\d+))?$/.exec(y);
+  if (!a || !b) return null;
+  if (!a[3] && !b[3] && a[2].length <= 15 && b[2].length <= 15) return Number(x) - Number(y);
+  const ai = a[2].replace(/^0+/, '') || '0', bi = b[2].replace(/^0+/, '') || '0';
+  const af = (a[3] || '').replace(/0+$/, ''), bf = (b[3] || '').replace(/0+$/, '');
+  const an = a[1] === '-' && (ai !== '0' || !!af), bn = b[1] === '-' && (bi !== '0' || !!bf);
+  if (an !== bn) return an ? -1 : 1;
+  const length = Math.max(af.length, bf.length), ap = af.padEnd(length, '0'), bp = bf.padEnd(length, '0');
+  const order = ai.length !== bi.length ? ai.length - bi.length : ai !== bi ? (ai < bi ? -1 : 1) : ap < bp ? -1 : ap > bp ? 1 : 0;
+  return an ? -order : order;
+}
+function workerMain(pageSize) {
+  let rows = [], columns = 0, version = 0, loaded = false, meta = {};
+  // Keep only the latest row result and candidate list per file; discard both on reload.
+  let queryCache = null, candidateCache = null;
+  const collator = new Intl.Collator('ja', {numeric:true, sensitivity:'base'});
+  function schemaFor(header) { return {header:!!header, columns, names:header && rows.length ? rows[0] : null}; }
+  function conditionKey(m, ignoredColumn = -1) {
+    return JSON.stringify([!!m.header, (m.search || '').toLocaleLowerCase('ja'),
+      Object.entries(m.filters || {}).filter(([column]) => Number(column) !== ignoredColumn && Number(column) < columns)]);
+  }
+  function rowMatcher(m, ignoredColumn = -1) {
+    const q = (m.search || '').toLocaleLowerCase('ja');
+    const filters = Object.entries(m.filters || {}).filter(([column]) => Number(column) !== ignoredColumn && Number(column) < columns)
+      .map(([column, filter]) => ({column:Number(column), all:filter.all, values:new Set(filter.values)}));
+    return row => (!q || row.some(c => c.toLocaleLowerCase('ja').includes(q))) && filters.every(f => f.all !== f.values.has(row[f.column] || ''));
+  }
+  self.onmessage = async ({data:m}) => {
+    try {
+      if (m.type === 'load') {
+        const current = ++version; loaded = false; queryCache = candidateCache = null;
+        const result = await readCSVFile(m, () => current === version);
+        if (!result) return;
+        const next = result.rows;
+        let width = 0; for (const row of next) width = Math.max(width, row.length);
+        if (width > 2000) throw Error('列数が2,000を超えています。区切り文字を確認してください。');
+        rows = next; columns = width; loaded = true;
+        meta = {encoding:result.encoding, delimiter:result.delimiter, warning:result.warning, limit:result.limit, bytesRead:result.bytesRead};
+        self.postMessage({type:'loaded', id:m.id, schema:schemaFor(m.header), ...meta});
+      } else if (m.type === 'autofit' && loaded) {
+        const start = m.header && rows.length ? 1 : 0;
+        const data = m.columns.map(column => {
+          const values = new Set();
+          for (let i = start; i < rows.length; i++) values.add(rows[i][column] || '');
+          return {column, values:Array.from(values)};
+        });
+        self.postMessage({type:'autofit', id:m.id, fit:m.fit, data});
+      } else if (m.type === 'filterValues' && loaded) {
+        const key = JSON.stringify([m.column, conditionKey(m, m.column)]);
+        if (!candidateCache || candidateCache.key !== key) {
+          const start = m.header && rows.length ? 1 : 0, matches = rowMatcher(m, m.column), values = new Map();
+          for (let i = start; i < rows.length; i++) if (matches(rows[i])) {
+            const value = rows[i][m.column] || ''; values.set(value, (values.get(value) || 0) + 1);
+          }
+          candidateCache = {key, items:Array.from(values).sort((a,b) => collator.compare(a[0], b[0])), search:null, matching:[]};
+        }
+        const q = (m.valueSearch || '').toLocaleLowerCase('ja');
+        const searchKey = JSON.stringify([q, m.percentDigits]);
+        if (candidateCache.search !== searchKey) {
+          const percent = m.percentDigits == null ? null : new Intl.NumberFormat('ja-JP', {
+            style:'percent', minimumFractionDigits:m.percentDigits, maximumFractionDigits:Math.max(1, m.percentDigits)
+          });
+          candidateCache.matching = q ? candidateCache.items.filter(([value]) =>
+            (value || '(空欄)').toLocaleLowerCase('ja').includes(q) ||
+            (percent && value && Number.isFinite(Number(value)) && percent.format(Number(value)).includes(q))
+          ) : candidateCache.items;
+          candidateCache.search = searchKey;
+        }
+        const items = candidateCache.matching;
+        const pages = Math.max(1, Math.ceil(items.length / 200)), page = Math.min(m.page, pages - 1);
+        self.postMessage({type:'filterValues', id:m.id, token:m.token, column:m.column, page, pages, total:items.length, items:items.slice(page * 200, (page + 1) * 200)});
+      } else if (m.type === 'query' && loaded) {
+        const start = m.header && rows.length ? 1 : 0;
+        const headers = Array.from({length:columns}, (_, i) => start ? rows[0][i] || `列 ${i + 1}` : `列 ${i + 1}`);
+        const key = JSON.stringify([conditionKey(m), m.sort, m.direction, m.probabilitySort]);
+        if (!queryCache || queryCache.key !== key) {
+          const matches = rowMatcher(m);
+          const indices = [];
+          for (let i = start; i < rows.length; i++) if (matches(rows[i])) indices.push(i);
+          if (m.sort >= 0) indices.sort((a,b) => {
+            const x = rows[a][m.sort] || '', y = rows[b][m.sort] || '';
+            if (m.probabilitySort) {
+              const aValue = x.trim() ? Number(x) : NaN;
+              const bValue = y.trim() ? Number(y) : NaN;
+              const aNumeric = Number.isFinite(aValue);
+              const bNumeric = Number.isFinite(bValue);
+              if (aNumeric && bNumeric) return (aValue - bValue) * m.direction;
+              if (aNumeric !== bNumeric) return (aNumeric ? -1 : 1) * m.direction;
+            }
+            const numeric = compareNumericStrings(x, y);
+            const comparison = numeric === null ? collator.compare(x, y) : numeric;
+            return comparison * m.direction;
+          });
+          queryCache = {key, indices};
+        }
+        const indices = queryCache.indices;
+        const pages = Math.max(1, Math.ceil(indices.length / pageSize));
+        const page = Math.min(m.page, pages - 1);
+        self.postMessage({type:'result', id:m.id, schema:schemaFor(m.header), headers, total:rows.length - start, matched:indices.length, pages, page,
+          data:indices.slice(page * pageSize, (page + 1) * pageSize).map(i => ({number:i + 1, cells:rows[i]})), ...meta});
+      }
+    } catch (error) { self.postMessage({type:'error', id:m.id, message:error.message}); }
+  };
+}
+const $ = id => document.getElementById(id);
+const PAGE_SIZE = 150;
+
+const workerURL = URL.createObjectURL(new Blob([parseCSV.toString(), detectDelimiter.toString(), decodeBytes.toString(), readCSVFile.toString(), compareNumericStrings.toString(), `(${workerMain.toString()})(${PAGE_SIZE})`], {type:'text/javascript'}));
+const tabs = []; let active = null, nextTabId = 0;
+const DEFAULT_WIDTH = 180;
+let defaultLimit = 0;
+let filterDialog = null, filterToken = 0;
+let cellSelection = null;
+
+const DATASET_NAME = "20260301_62_001_リカーリングトピック集計.csv";
+const TOPIC_COLUMNS = [
+  "recurring_topic",
+  "group_id",
+  "matched_seeds",
+  "total_seeds",
+  "match_rate",
+  "representative_seed",
+  "representative_local_topic",
+  "minimum_pair_overlap",
+  "representative_probability_top_words",
+  "probability_top_words_by_seed",
+  "prior_share_mean",
+  "prior_share_std",
+  "prior_share_min",
+  "prior_share_max",
+  "prior_share_by_seed",
+  "npmi_top_n",
+  "npmi_min_seed_count",
+  "common_npmi_word_count",
+  "common_npmi_top_words",
+  "common_npmi_word_support"
+];
+const PROBABILITY_COLUMNS = new Set([4, 10, 11, 12, 13]);
+const SUMMARY_COLUMNS = [
+  {index:0, label:'トピック', width:104},
+  {index:4, label:'一致率', width:106, format:'match'},
+  {index:8, label:'代表上位語', width:252},
+  {index:18, label:'共通NPMI上位語', width:238},
+  {index:10, label:'平均事前確率', width:148, format:'probability'},
+  {index:11, label:'事前確率の標準偏差', width:184, format:'probability'},
+];
+const SUMMARY_BY_INDEX = new Map(SUMMARY_COLUMNS.map(column => [column.index, column]));
+const matchPercent = new Intl.NumberFormat('ja-JP', {style:'percent', maximumFractionDigits:1});
+const probabilityPercent = new Intl.NumberFormat('ja-JP', {style:'percent', minimumFractionDigits:3, maximumFractionDigits:3});
+const localeNumber = new Intl.NumberFormat('ja-JP');
+
+function hasTopicSchema(schema) {
+  return schema?.header && schema.columns === TOPIC_COLUMNS.length &&
+    TOPIC_COLUMNS.every((name, index) => schema.names?.[index] === name);
+}
+function isSummary(tab) { return tab.topic && tab.view === 'summary'; }
+function visibleColumns(tab) {
+  return isSummary(tab) ? SUMMARY_COLUMNS.map(column => column.index) :
+    tab.result.headers.map((_, index) => index).filter(index => !tab.hidden.has(index));
+}
+function columnName(tab, column) {
+  return (isSummary(tab) && SUMMARY_BY_INDEX.get(column)?.label) || tab.result.headers[column];
+}
+function formatPercent(value, formatter) {
+  if (value === undefined || value === null || String(value).trim() === '') return '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? formatter.format(number) : String(value);
+}
+function summaryFormat(tab, column) {
+  return isSummary(tab) ? SUMMARY_BY_INDEX.get(column)?.format : undefined;
+}
+function displayValue(tab, column, value) {
+  const format = summaryFormat(tab, column);
+  if (format === 'match') return formatPercent(value, matchPercent);
+  if (format === 'probability') return formatPercent(value, probabilityPercent);
+  return value;
+}
+function readJson(value, fallback) {
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && (Array.isArray(parsed) === Array.isArray(fallback)) && typeof parsed === 'object') return parsed;
+  } catch (_) { /* Raw CSV values remain available in the full table. */ }
+  return fallback;
+}
+function detailSection(title) {
+  const section = document.createElement('section');
+  section.className = 'topic-section';
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  section.append(heading);
+  return section;
+}
+function seedTable(words, priorShares) {
+  const bySeed = new Map();
+  for (const item of words) {
+    if (!item || item.seed == null) continue;
+    bySeed.set(String(item.seed), {topic:item.local_topic, words:Array.isArray(item.words) ? item.words.join(' ') : ''});
+  }
+  for (const item of priorShares) {
+    if (!item || item.seed == null) continue;
+    const seed = String(item.seed);
+    const row = bySeed.get(seed) || {topic:item.local_topic, words:''};
+    row.share = item.prior_share;
+    bySeed.set(seed, row);
+  }
+  if (!bySeed.size) {
+    const empty = document.createElement('p');
+    empty.textContent = 'シード別データがありません。';
+    return empty;
+  }
+  const wrapper = document.createElement('div');
+  wrapper.className = 'seed-table-wrap';
+  wrapper.tabIndex = 0;
+  wrapper.setAttribute('role', 'region');
+  wrapper.setAttribute('aria-label', 'シード別の結果');
+  const table = document.createElement('table');
+  table.className = 'seed-table';
+  const head = table.createTHead().insertRow();
+  for (const label of ['シード', 'トピック番号', '事前確率', '上位語（確率順）']) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    head.append(th);
+  }
+  const body = table.createTBody();
+  for (const [seed, row] of bySeed) {
+    const tr = body.insertRow();
+    for (const value of [seed, row.topic ?? '—', formatPercent(row.share, probabilityPercent), row.words || '—']) {
+      tr.insertCell().textContent = value;
+    }
+  }
+  wrapper.append(table);
+  return wrapper;
+}
+function showTopicDetails(row) {
+  const [topic, , matched, total, rate, representativeSeed, localTopic, pairOverlap, representativeWords,
+    bySeedWords, mean, std, min, max, bySeedShares, topN, minSeedCount, commonCount, commonWords, wordSupport] = row.cells;
+  const ratio = formatPercent(rate, matchPercent);
+  $('topicTitle').textContent = topic || 'トピック';
+  $('topicSubtitle').textContent = `代表シード ${representativeSeed || '—'} ・トピック番号 ${localTopic || '—'}`;
+  const metrics = document.createElement('dl');
+  metrics.className = 'topic-metrics';
+  for (const [label, value] of [
+    ['シード一致率', `${ratio}（${matched || '—'}/${total || '—'}）`],
+    ['ペア間の最小重複語数', pairOverlap],
+    ['平均事前確率', formatPercent(mean, probabilityPercent)],
+    ['共通NPMI語数', commonCount],
+  ]) {
+    const item = document.createElement('div');
+    const term = document.createElement('dt');
+    const description = document.createElement('dd');
+    term.textContent = label;
+    description.textContent = value || '—';
+    item.append(term, description);
+    metrics.append(item);
+  }
+
+  const representative = detailSection('代表上位語（確率順）');
+  const words = document.createElement('p');
+  words.textContent = representativeWords || '—';
+  representative.append(words);
+
+  const common = detailSection('共通NPMI上位語');
+  const support = readJson(wordSupport, {});
+  const orderedWords = commonWords ? commonWords.trim().split(/\s+/) : Object.keys(support);
+  if (orderedWords.length) {
+    const note = document.createElement('p');
+    note.className = 'topic-detail-note';
+    note.textContent = `各シードのNPMI上位 ${topN || '—'} 語のうち、${minSeedCount || '—'} シード以上に出現。数字は出現シード数です。`;
+    const list = document.createElement('ul');
+    list.className = 'word-support';
+    for (const word of orderedWords) {
+      const item = document.createElement('li');
+      item.textContent = word;
+      if (Object.hasOwn(support, word)) {
+        const count = document.createElement('small');
+        count.textContent = support[word];
+        item.append(count);
+      }
+      list.append(item);
+    }
+    common.append(note, list);
+  } else {
+    const empty = document.createElement('p');
+    empty.textContent = '該当する語はありません。';
+    common.append(empty);
+  }
+
+  const seeds = detailSection('シード別の結果');
+  const distribution = document.createElement('p');
+  distribution.className = 'topic-detail-note';
+  distribution.textContent = `事前確率  最小 ${formatPercent(min, probabilityPercent)} ／ 最大 ${formatPercent(max, probabilityPercent)} ／ 標準偏差 ${formatPercent(std, probabilityPercent)}`;
+  seeds.append(distribution, seedTable(readJson(bySeedWords, []), readJson(bySeedShares, [])));
+  $('topicContent').replaceChildren(metrics, representative, common, seeds);
+  $('topicDialog').showModal();
+  $('topicDialog').scrollTop = 0;
+}
+$('closeTopic').onclick = () => $('topicDialog').close();
+
+function updateDatasetUI(tab, result) {
+  const topic = !!tab?.topic;
+  const summary = topic && isSummary(tab);
+  document.body.classList.toggle('topic-source', topic);
+  $('tableWrap').classList.toggle('topic-summary', summary);
+  $('viewSwitcher').hidden = !topic;
+  $('summaryView').setAttribute('aria-pressed', String(summary));
+  $('rawView').setAttribute('aria-pressed', String(topic && !summary));
+  $('columnsPanel').hidden = summary || !result;
+  if (summary) $('columnsPanel').open = false;
+  $('datasetLine').hidden = !topic || !result;
+  $('topicHint').hidden = !summary;
+  $('downloadDataset').hidden = !topic || !result;
+  $('restoreDataset').hidden = !datasetURL || !tab || tab.hosted;
+  $('restoreDataset').disabled = datasetLoading;
+  $('openDataset').hidden = !datasetURL || datasetLoading;
+  $('openDataset').textContent = datasetError ? 'もう一度読み込む' : '集計CSVを読み込む';
+  $('emptyTitle').textContent = datasetLoading ? '集計CSVを読み込み中…' : 'CSVを開く';
+  $('emptyNote').textContent = datasetError
+    ? 'HTMLとCSVを同じフォルダーに置いてください。「CSVを開く」から手動で選ぶこともできます。'
+    : datasetLoading ? '' : '「CSVを開く」からファイルを選ぶか、ここにドロップしてください。';
+  if (topic && result) {
+    const total = `${result.limit ? '読み込み範囲 ' : '全'}${localeNumber.format(result.total)}件`;
+    $('datasetScope').textContent = result.matched === result.total ? total : `${total}のうち ${localeNumber.format(result.matched)}件を表示`;
+  }
+}
+function setTopicView(view) {
+  if (!active?.topic || !active.result || active.view === view) return;
+  closeFilter(false);
+  closeCellDetails(false);
+  active.view = view;
+  active.scrollTop = active.scrollLeft = 0;
+  updateStatus();
+  renderTable();
+  renderColumnSettings();
+}
+$('summaryView').onclick = () => setTopicView('summary');
+$('rawView').onclick = () => setTopicView('raw');
+
+const datasetURL = ['http:', 'https:'].includes(window.location.protocol)
+  ? new URL(encodeURIComponent(DATASET_NAME), window.location.href)
+  : null;
+let datasetLoading = false;
+let datasetError = '';
+
+async function fetchDataset() {
+  const response = await fetch(datasetURL, {cache:'no-cache', mode:'same-origin'});
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (response.headers.get('Content-Type')?.toLowerCase().includes('text/html')) {
+    throw new Error('CSVのURLからHTMLが返されました');
+  }
+  const blob = await response.blob();
+  if (!blob.size) throw new Error('CSVが空です');
+  return new File([blob], DATASET_NAME, {type:'text/csv'});
+}
+
+async function openDataset(activate = true) {
+  const current = tabs.find(tab => tab.hosted);
+  if (current) { selectTab(current); return; }
+  if (!datasetURL || datasetLoading) return;
+
+  datasetLoading = true;
+  datasetError = '';
+  updateStatus();
+  try {
+    const file = await fetchDataset();
+    if (!openFiles([file], [], {hosted:true, select:activate || !active})) {
+      throw new Error('CSVが50 MBを超えています');
+    }
+  } catch (error) {
+    datasetError = `集計CSVを読み込めませんでした（${error.message}）。`;
+  } finally {
+    datasetLoading = false;
+    updateStatus();
+  }
+}
+$('restoreDataset').onclick = $('openDataset').onclick = () => openDataset();
+$('downloadDataset').onclick = () => {
+  if (!active?.result) return;
+  const file = active.file;
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+};
+
+function columnWidth(tab, i) { return isSummary(tab) ? SUMMARY_BY_INDEX.get(i).width : tab.widths[i] || DEFAULT_WIDTH; }
+function clampWidth(value) { return Math.max(60, Math.min(1200, Math.round(Number(value) || DEFAULT_WIDTH))); }
+function message(text, error = false) { $('message').textContent = text; $('message').hidden = !text; $('message').classList.toggle('error', error); }
+function renderTabs() {
+  $('tabs').hidden = !tabs.length || (tabs.length === 1 && tabs[0].hosted);
+  const fragment = document.createDocumentFragment();
+  tabs.forEach(tab => {
+    const item = document.createElement('div'); item.className = 'tab-item' + (tab === active ? ' active' : ''); item.setAttribute('role', 'presentation');
+    const button = document.createElement('button'); button.textContent = tab.file.name; button.title = tab.file.name; button.id = `tab-${tab.id}`;
+    button.setAttribute('role', 'tab'); button.setAttribute('aria-selected', String(tab === active)); button.setAttribute('aria-controls', 'main'); button.tabIndex = tab === active ? 0 : -1;
+    button.onclick = () => selectTab(tab);
+    button.onkeydown = e => {
+      const index = tabs.indexOf(tab);
+      let target;
+      if (e.key === 'ArrowRight') target = tabs[(index + 1) % tabs.length];
+      if (e.key === 'ArrowLeft') target = tabs[(index + tabs.length - 1) % tabs.length];
+      if (e.key === 'Home') target = tabs[0];
+      if (e.key === 'End') target = tabs[tabs.length - 1];
+      if (e.key === 'Delete') { e.preventDefault(); closeTab(tab); if (active) $(`tab-${active.id}`).focus(); }
+      if (target) { e.preventDefault(); selectTab(target); $(`tab-${target.id}`).focus(); }
+    };
+    const close = document.createElement('button'); close.className = 'tab-close'; close.textContent = '×'; close.setAttribute('aria-label', `${tab.file.name}を閉じる`); close.onclick = () => closeTab(tab);
+    item.append(button, close); fragment.append(item);
+  }); $('tabs').replaceChildren(fragment);
+}
+function selectTab(tab) {
+  closeCellDetails(false); closeFilter(false);
+  if (active) { active.scrollTop = $('tableWrap').scrollTop; active.scrollLeft = $('tableWrap').scrollLeft; }
+  active = tab; if (tab) defaultLimit = tab.limit; document.body.classList.remove('resizing'); $('columnsPanel').open = false; $('csvOptions').open = false; renderTabs(); renderActive();
+}
+function closeTab(tab) {
+  const index = tabs.indexOf(tab); if (index < 0) return;
+  clearTimeout(tab.timer); tab.worker.terminate(); tabs.splice(index, 1);
+  if (active === tab) { active = null; selectTab(tabs[Math.min(index, tabs.length - 1)] || null); }
+  else renderTabs();
+}
+function query(tab = active, reset = false) {
+  if (!tab || !tab.ready) return;
+  if (tab === active) closeCellDetails(false);
+  if (filterDialog && filterDialog.tab === tab) closeFilter(false);
+  if (reset) { tab.page = 0; tab.scrollTop = 0; }
+  tab.pending = true; tab.error = ''; if (tab === active) updateStatus();
+  tab.worker.postMessage({type:'query', id:++tab.request, header:tab.header, search:tab.search, sort:tab.sort, direction:tab.direction, page:tab.page, probabilitySort:tab.topic && PROBABILITY_COLUMNS.has(tab.sort), filters:tab.filters});
+}
+function load(tab = active, preserve = false) {
+  if (!tab) return;
+  if (tab === active) closeCellDetails(false);
+  tab.schemaNotice = '';
+  tab.reloadError = '';
+  if (filterDialog && filterDialog.tab === tab) closeFilter(false);
+  clearTimeout(tab.timer); tab.generation++; tab.autoFit = true; tab.fits = {}; tab.ready = false; tab.pending = true; tab.error = ''; tab.result = null; tab.keepView = preserve;
+  if (!preserve) { tab.sort = -1; tab.page = 0; tab.scrollTop = 0; }
+  if (tab === active) renderActive();
+  tab.worker.postMessage({type:'load', id:++tab.request, file:tab.file, encoding:tab.encoding, delimiter:tab.delimiter, limit:tab.limit, header:tab.header});
+}
+function openFiles(files, handles = [], {hosted = false, select = true} = {}) {
+  let last = null, rejected = 0;
+  const limit = hosted ? 0 : defaultLimit;
+  for (const [index, file] of Array.from(files).entries()) {
+    if (!limit && file.size > 50 * 1024 * 1024) { rejected++; continue; }
+    const tab = {id:++nextTabId, file, handle:handles[index] || null, reloading:false, reloadError:'', worker:new Worker(workerURL), ready:false, pending:true, request:0,
+      hosted, topic:false, view:'summary', limit, encoding:'auto', delimiter:'auto', header:true, search:'', sort:-1, direction:1, page:0, result:null,
+      schema:null, schemaNotice:'', filters:{}, filterButtons:{}, widths:{}, manualWidths:new Set(), fits:{}, fitSequence:0, generation:0, autoFit:true, hidden:new Set(), scrollTop:0, scrollLeft:0, error:'', timer:null};
+    tabs.push(tab); last = tab;
+    tab.worker.onmessage = ({data:r}) => {
+      if (!tabs.includes(tab)) return;
+      if (r.type === 'filterValues') { receiveFilterValues(tab, r); return; }
+      if (r.type === 'autofit') { if (r.id === tab.generation) fitColumns(tab, r); return; }
+      if (r.id !== tab.request) return;
+      if (r.type === 'error') { tab.ready = false; tab.pending = false; tab.error = r.message; if (tab === active) renderActive(); return; }
+      if (r.type === 'loaded') {
+        const schemaChanged = tab.schema && JSON.stringify(tab.schema) !== JSON.stringify(r.schema);
+        const ambiguousHeaders = !r.schema.header || !r.schema.names || r.schema.names.some(name => name.trim() === '') || new Set(r.schema.names).size !== r.schema.names.length;
+        if (tab.keepView && tab.schema && (schemaChanged || ambiguousHeaders)) {
+          tab.filters = {}; tab.hidden.clear(); tab.widths = {}; tab.manualWidths.clear(); tab.sort = -1; tab.direction = 1; tab.page = 0; tab.scrollTop = tab.scrollLeft = 0; tab.keepView = false;
+          tab.schemaNotice = (schemaChanged ? '列構成が変わったため、' : '見出しがない・空欄・重複していて列の対応を確定できないため、') + '列フィルタ・列の表示状態・列幅・並べ替えをリセットしました。全体検索と読み込み範囲は引き継いでいます。';
+        }
+        tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.ready = true; query(tab, !tab.keepView); return;
+      }
+      for (const column of Object.keys(tab.filters)) if (Number(column) >= r.headers.length) delete tab.filters[column];
+      tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.result = r; tab.page = r.page; tab.pending = false;
+      if (tab === active) renderActive();
+      if (tab.autoFit) { tab.autoFit = false; requestFit(tab, r.headers.map((_,i) => i).filter(i => !tab.keepView || !tab.manualWidths.has(i))); }
+    };
+    tab.worker.onerror = () => { tab.ready = false; tab.pending = false; tab.error = '処理を続けられませんでした。タブを閉じ、ファイルを小さくして再度開いてください。'; if (tab === active) renderActive(); };
+    load(tab);
+  }
+  if (last) {
+    if (select) selectTab(last); else { renderTabs(); renderActive(); }
+  }
+  if (rejected && !hosted) message(`${rejected}件は50 MBを超えています。「先頭のみ」を選んでから開き直してください。`, true);
+  return last;
+}
+function updateStatus() {
+  const tab = active, r = tab && tab.result;
+  updateDatasetUI(tab, r);
+  $('main').setAttribute('aria-busy', String(tab ? tab.pending || tab.reloading : datasetLoading));
+  $('reload').disabled = !tab || tab.pending || tab.reloading;
+  $('reload').title = tab?.hosted ? '同じフォルダーから集計CSVを再読み込み' : tab?.handle ? '元のファイルから最新の内容を読み込む' : '同じファイルを選び直して最新の内容を読み込む';
+  const filterCount = tab ? Object.keys(tab.filters).length : 0;
+  $('clearFilters').hidden = !filterCount; $('clearFilters').disabled = !tab || tab.pending;
+  $('clearFilters').textContent = `列フィルタを解除（${filterCount}列）`;
+  renderScopeAndConditions();
+  $('search').disabled = !tab || !tab.ready;
+  $('footer').hidden = !r;
+  $('pagination').hidden = !r || r.pages < 2;
+  $('prev').disabled = !r || tab.pending || tab.page === 0;
+  $('next').disabled = !r || tab.pending || tab.page >= r.pages - 1;
+  $('count').textContent = r ? `${r.matched.toLocaleString()} / ${r.total.toLocaleString()} 行${r.limit ? '（読み込み範囲内）' : ''}` : '0 行';
+  $('page').textContent = r ? `${r.page + 1} / ${r.pages}` : '—';
+  $('info').textContent = r ? `${visibleColumns(tab).length} / ${r.headers.length} 列表示` : '';
+  if (!tab) message(datasetError, !!datasetError);
+  else if (tab.reloading) message('CSVを再読み込み中…');
+  else if (tab.reloadError || tab.error) message(tab.reloadError || tab.error, true);
+  else if (tab.pending) message(tab.ready ? '表示を更新中…' : `${tab.file.name} を読み込み中…`);
+  else if (r) message(r.warning || `${r.limit ? `先頭${r.limit.toLocaleString()}データ行まで読み込み（見出しは別・全体件数は未集計） · ` : ''}${r.encoding.toUpperCase()} / ${r.delimiter === '\t' ? 'タブ' : r.delimiter === ';' ? 'セミコロン' : 'カンマ'}区切り · 見出しをクリックで並べ替え · 右端をドラッグで列幅変更`, !!r.warning);
+}
+function renderActive() {
+  const tab = active;
+  $('encoding').value = tab ? tab.encoding : 'auto'; $('delimiter').value = tab ? tab.delimiter : 'auto';
+  $('readMode').value = (tab ? tab.limit : defaultLimit) ? 'limited' : 'all';
+  $('rowLimitLabel').hidden = $('readMode').value !== 'limited';
+  if (tab && tab.limit) $('rowLimit').value = tab.limit;
+  $('header').checked = tab ? tab.header : true; $('search').value = tab ? tab.search : '';
+  for (const id of ['encoding','delimiter','header']) $(id).disabled = !tab;
+  if (tab && !$('tabs').hidden) {
+    $('main').setAttribute('role', 'tabpanel');
+    $('main').setAttribute('aria-labelledby', `tab-${tab.id}`);
+  } else {
+    $('main').removeAttribute('role');
+    $('main').removeAttribute('aria-labelledby');
+  }
+  $('empty').hidden = !!tab; $('tableWrap').hidden = !tab || !tab.result;
+  updateStatus(); renderTable(); renderColumnSettings();
+}
+function applyWidths() {
+  if (!active || !active.result) return;
+  const rowNumberWidth = 48;
+  let total = rowNumberWidth;
+  Array.from($('colgroup').children).forEach((col,index) => {
+    const width = index === 0 ? rowNumberWidth : columnWidth(active, Number(col.dataset.column));
+    col.style.width = `${width}px`; if (index) total += width;
+  });
+  $('table').style.width = `${total}px`;
+}
+function requestFit(tab, columns) {
+  if (!tab.ready || !tab.result) return;
+  const computed = getComputedStyle($('table'));
+  const textStyle = {};
+  // Copy longhands: the font shorthand can be empty when tabular-nums is enabled.
+  for (const key of ['fontFamily','fontSize','fontWeight','fontStyle','fontStretch','fontVariant','fontVariantNumeric','fontFeatureSettings','fontKerning','letterSpacing','wordSpacing','tabSize']) textStyle[key] = computed[key];
+  const fit = {id:++tab.fitSequence, textStyle};
+  columns.forEach(i => { tab.manualWidths.delete(i); tab.fits[i] = fit; });
+  tab.worker.postMessage({type:'autofit', id:tab.generation, columns, header:tab.header, fit});
+}
+async function fitColumns(tab, r) {
+  const measure = document.createElement('span');
+  Object.assign(measure.style, r.fit.textStyle, {
+    position:'fixed', left:'-100000px', top:'0', visibility:'hidden', pointerEvents:'none',
+    whiteSpace:'pre', width:'max-content', maxWidth:'none', padding:'0', border:'0'
+  });
+  measure.setAttribute('aria-hidden', 'true'); document.body.append(measure);
+  const alive = () => tabs.includes(tab) && tab.generation === r.id;
+  const valid = column => alive() && tab.fits[column] && tab.fits[column].id === r.fit.id;
+  let processed = 0;
+  try {
+    for (const {column, values} of r.data) {
+      if (!valid(column)) continue;
+      let width = tab.topic ? Math.min(320, tab.result.headers[column].length * 8 + 44) : 60;
+      for (const value of values) {
+        for (const line of value.split(/\r\n|\r|\n/)) {
+          measure.textContent = line;
+          // Real browser text metrics include tabular digits, fallback fonts and tabs.
+          // Add cell padding/border (25px) and a 12px breathing room.
+          width = Math.max(width, measure.getBoundingClientRect().width + 25 + 12);
+        }
+        if (width >= 1200) break;
+        if (++processed % 250 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+          if (!alive()) return;
+          if (!valid(column)) break;
+        }
+      }
+      if (valid(column)) tab.widths[column] = clampWidth(Math.ceil(width));
+    }
+  } finally { measure.remove(); }
+  if (alive() && tab === active && !isSummary(tab)) { renderTable(); renderColumnSettings(); }
+}
+
+function resizeHandle(tab, i, name) {
+  const handle = document.createElement('span'); handle.className = 'resize-handle'; handle.tabIndex = 0;
+  handle.setAttribute('role', 'separator'); handle.setAttribute('aria-orientation', 'vertical'); handle.setAttribute('aria-label', `${name}の列幅`);
+  handle.setAttribute('aria-valuemin', '60'); handle.setAttribute('aria-valuemax', '1200'); handle.setAttribute('aria-valuenow', String(columnWidth(tab, i)));
+  const update = width => { tab.manualWidths.add(i); delete tab.fits[i]; tab.widths[i] = clampWidth(width); handle.setAttribute('aria-valuenow', String(tab.widths[i])); if (active === tab) applyWidths(); };
+  handle.onkeydown = e => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+    e.preventDefault(); update(e.key === 'Home' ? 60 : e.key === 'End' ? 1200 : columnWidth(tab, i) + (e.key === 'ArrowRight' ? 10 : -10)); renderColumnSettings();
+  };
+  handle.title = 'ダブルクリックで内容に合わせる';
+  handle.ondblclick = () => requestFit(tab, [i]);
+  handle.onpointerdown = e => {
+    if (e.button !== 0) return;
+    e.preventDefault(); const start = e.clientX, width = columnWidth(tab, i); handle.setPointerCapture(e.pointerId); document.body.classList.add('resizing');
+    handle.onpointermove = event => update(width + event.clientX - start);
+    const finish = () => { handle.onpointermove = null; document.body.classList.remove('resizing'); if (active === tab) renderColumnSettings(); };
+    handle.onpointerup = handle.onpointercancel = handle.onlostpointercapture = finish;
+  }; return handle;
+}
+function renderTable() {
+  $('head').replaceChildren(); $('body').replaceChildren(); $('colgroup').replaceChildren();
+  const tab = active; if (!tab || !tab.result) return;
+  const r = tab.result, summary = isSummary(tab), visible = visibleColumns(tab);
+  const tr = document.createElement('tr'), corner = document.createElement('th'); corner.scope = 'col'; corner.textContent = '#'; corner.title = '元のCSVの行番号'; tr.append(corner);
+  const numberCol = document.createElement('col'); $('colgroup').append(numberCol);
+  visible.forEach(i => {
+    const name = columnName(tab, i), col = document.createElement('col'); col.dataset.column = i; $('colgroup').append(col);
+    const th = document.createElement('th'); th.scope = 'col'; th.setAttribute('aria-sort', tab.sort === i ? tab.direction === 1 ? 'ascending' : 'descending' : 'none');
+    const b = document.createElement('button'); b.textContent = name + (tab.sort === i ? tab.direction === 1 ? ' ↑' : ' ↓' : ' ↕'); b.title = `${name}で並べ替え`;
+    b.onclick = () => { if (tab.sort === i) { if (tab.direction === 1) tab.direction = -1; else { tab.sort = -1; tab.direction = 1; } } else { tab.sort = i; tab.direction = 1; } query(tab, true); };
+    b.className = 'sort-button';
+    const filter = document.createElement('button'); filter.className = 'filter-button' + (tab.filters[i] ? ' filtered' : ''); filter.textContent = '▽';
+    filter.title = `${name}のフィルタ${tab.filters[i] ? '（適用中）' : ''}`; filter.setAttribute('aria-label', filter.title); filter.setAttribute('aria-haspopup', 'dialog');
+    filter.setAttribute('aria-expanded', String(!!filterDialog && filterDialog.tab === tab && filterDialog.column === i));
+    filter.onclick = () => openFilter(tab, i, filter); tab.filterButtons[i] = filter;
+    th.append(b); if (!summary) th.append(resizeHandle(tab, i, name)); th.append(filter); tr.append(th);
+  }); $('head').append(tr); applyWidths();
+  const fragment = document.createDocumentFragment();
+  r.data.forEach(row => {
+    const tr = document.createElement('tr'), n = document.createElement('td'); n.textContent = row.number; tr.append(n);
+    visible.forEach(i => {
+      const td = document.createElement('td'), value = row.cells[i] || '';
+      if (summary && i === 0) {
+        const button = document.createElement('button');
+        button.className = 'topic-button';
+        button.textContent = value || '詳細';
+        button.setAttribute('aria-label', `${value || 'トピック'}の詳細`);
+        button.setAttribute('aria-haspopup', 'dialog');
+        button.onclick = () => showTopicDetails(row);
+        td.append(button);
+        tr.append(td);
+        return;
+      }
+      td.textContent = displayValue(tab, i, value);
+      if (summary && i === 4) {
+        td.classList.add('match-rate');
+        const count = document.createElement('small');
+        count.className = 'match-count';
+        count.textContent = ` ${row.cells[2] || '—'}/${row.cells[3] || '—'}`;
+        td.append(count);
+      }
+      if (summary && i === 18 && !value) {
+        td.textContent = '—';
+        td.classList.add('no-value');
+      }
+      td.tabIndex = 0;
+      td.title = value + '\nクリックまたはEnterで全文を表示';
+      td.onclick = () => showCellDetails(tab, row.number, i, value, td);
+      td.onkeydown = e => { if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); showCellDetails(tab, row.number, i, value, td); $('cellText').focus(); } };
+      if ((summaryFormat(tab, i) === 'probability') || (!summary && /^-?\d+(\.\d+)?$/.test(value))) td.classList.add('number');
+      tr.append(td);
+    }); fragment.append(tr);
+  });
+  if (!r.data.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = visible.length + 1; td.textContent = '該当する行はありません。'; tr.append(td); fragment.append(tr); }
+  $('body').append(fragment); $('tableWrap').scrollTop = tab.scrollTop; $('tableWrap').scrollLeft = tab.scrollLeft;
+}
+function renderColumnSettings() {
+  if (!$('columnsPanel').open) return;
+  const tab = active, r = tab && tab.result; $('showAll').disabled = $('hideAll').disabled = $('resetWidths').disabled = !r;
+  $('columnList').replaceChildren(); if (!r) { $('columnList').textContent = 'ファイルを開くと設定できます。'; return; }
+  r.headers.forEach((name, i) => {
+    const row = document.createElement('div'); row.className = 'column-setting';
+    const label = document.createElement('label'), check = document.createElement('input'), text = document.createElement('span'); check.type = 'checkbox'; check.checked = !tab.hidden.has(i); text.textContent = `${i + 1}. ${name}`; text.title = name;
+    check.onchange = () => { if (check.checked) tab.hidden.delete(i); else tab.hidden.add(i); renderTable(); updateStatus(); }; label.append(check, text);
+    const width = document.createElement('input'); width.type = 'number'; width.min = '60'; width.max = '1200'; width.step = '1'; width.value = columnWidth(tab, i); width.setAttribute('aria-label', `${i + 1}列目 ${name}の幅（px）`);
+    width.onchange = () => { tab.manualWidths.add(i); delete tab.fits[i]; tab.widths[i] = clampWidth(width.value); width.value = tab.widths[i]; renderTable(); };
+    const unit = document.createElement('span'); unit.className = 'unit'; unit.textContent = 'px'; row.append(label, width, unit); $('columnList').append(row);
+  });
+}
+$('columnsPanel').ontoggle = () => {
+  if ($('columnsPanel').open) renderColumnSettings(); else $('columnList').replaceChildren();
+};
+function closeFilter(restoreFocus = true) {
+  if (!filterDialog) return;
+  const {tab, column, timer} = filterDialog; clearTimeout(timer); filterDialog = null; $('filterPopup').hidden = true;
+  const button = tab.filterButtons[column]; if (button) { button.setAttribute('aria-expanded', 'false'); if (restoreFocus && active === tab) button.focus(); }
+}
+function openFilter(tab, column, button) {
+  if (!tab.ready || tab.pending) return;
+  if (filterDialog && filterDialog.tab === tab && filterDialog.column === column) { closeFilter(); return; }
+  closeFilter(false); $('columnsPanel').open = false; $('csvOptions').open = false;
+  const saved = tab.filters[column];
+  filterDialog = {tab, column, all:saved ? saved.all : true, values:new Set(saved ? saved.values : []), items:[], page:0, pages:1, token:0, timer:null};
+  $('filterTitle').textContent = `${columnName(tab, column)} のフィルタ`; $('filterSearch').value = '';
+  $('filterPopup').hidden = false; button.setAttribute('aria-expanded', 'true');
+  const rect = button.getBoundingClientRect();
+  $('filterPopup').style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 346))}px`;
+  $('filterPopup').style.top = `${Math.max(8, Math.min(rect.bottom + 5, window.innerHeight - 470))}px`;
+  requestFilterValues(); $('filterSearch').focus();
+}
+function requestFilterValues() {
+  const d = filterDialog; if (!d) return;
+  d.token = ++filterToken; $('filterValues').textContent = '候補を読み込み中…'; $('filterPrev').disabled = $('filterNext').disabled = true;
+  d.tab.worker.postMessage({type:'filterValues', id:d.tab.generation, token:d.token, column:d.column, header:d.tab.header, search:d.tab.search, filters:d.tab.filters, valueSearch:$('filterSearch').value, percentDigits:{match:0, probability:3}[summaryFormat(d.tab, d.column)] ?? null, page:d.page});
+}
+function receiveFilterValues(tab, r) {
+  const d = filterDialog;
+  if (!d || d.tab !== tab || r.id !== tab.generation || r.token !== d.token) return;
+  d.items = r.items; d.page = r.page; d.pages = r.pages;
+  $('filterCount').textContent = `${r.total.toLocaleString()}候補 · ${r.page + 1} / ${r.pages}`;
+  $('filterPrev').disabled = r.page === 0; $('filterNext').disabled = r.page >= r.pages - 1;
+  renderFilterValues();
+}
+function renderFilterValues() {
+  const d = filterDialog; if (!d) return;
+  $('filterValues').replaceChildren();
+  for (const [value, count] of d.items) {
+    const label = document.createElement('label'), check = document.createElement('input'), text = document.createElement('span'), number = document.createElement('small');
+    check.type = 'checkbox'; check.checked = d.all !== d.values.has(value); text.textContent = value ? displayValue(d.tab, d.column, value) : '(空欄)'; number.textContent = count.toLocaleString();
+    check.onchange = () => { if (check.checked === d.all) d.values.delete(value); else d.values.add(value); };
+    label.append(check, text, number); $('filterValues').append(label);
+  }
+  if (!d.items.length) $('filterValues').textContent = '該当する候補はありません。';
+}
+$('filterSearch').oninput = () => {
+  if (!filterDialog) return;
+  const d = filterDialog; clearTimeout(d.timer); d.token = ++filterToken;
+  d.timer = setTimeout(() => { if (filterDialog === d) { d.page = 0; requestFilterValues(); } }, 180);
+};
+$('filterSelectAll').onclick = () => { if (filterDialog) { filterDialog.all = true; filterDialog.values.clear(); renderFilterValues(); } };
+$('filterSelectNone').onclick = () => { if (filterDialog) { filterDialog.all = false; filterDialog.values.clear(); renderFilterValues(); } };
+$('filterPrev').onclick = () => { if (filterDialog && filterDialog.page > 0) { filterDialog.page--; requestFilterValues(); } };
+$('filterNext').onclick = () => { if (filterDialog && filterDialog.page < filterDialog.pages - 1) { filterDialog.page++; requestFilterValues(); } };
+$('filterApply').onclick = () => {
+  const d = filterDialog; if (!d) return;
+  if (d.all && d.values.size === 0) delete d.tab.filters[d.column];
+  else d.tab.filters[d.column] = {all:d.all, values:Array.from(d.values)};
+  closeFilter(); query(d.tab, true);
+};
+$('filterClear').onclick = () => { const d = filterDialog; if (d) { delete d.tab.filters[d.column]; closeFilter(); query(d.tab, true); } };
+$('filterCancel').onclick = () => closeFilter();
+$('clearFilters').onclick = () => { if (active) { active.filters = {}; closeFilter(false); query(active, true); } };
+function renderScopeAndConditions() {
+  const tab = active, r = tab && tab.result;
+  $('scopeBar').hidden = !tab; $('scopeBar').classList.toggle('limited', !!tab && tab.limit > 0);
+  if (tab) {
+    $('scopeBadge').textContent = tab.limit ? `読み込み対象：先頭 ${tab.limit.toLocaleString()} データ行まで${tab.header ? '（見出しは別）' : '（見出しなし）'}` : '読み込み対象：全行';
+    $('scopeNote').textContent = r ? `${r.total.toLocaleString()} データ行を読み込み済み。検索・フィルタ・並べ替えはこの範囲が対象です。` : tab.pending ? '読み込み中…' : 'まだ読み込めていません。';
+  }
+  $('schemaNotice').hidden = !tab || !tab.schemaNotice; $('schemaNoticeText').textContent = tab ? tab.schemaNotice : '';
+  $('conditionsBar').replaceChildren();
+  const chip = (description, remove, ariaLabel) => {
+    const wrapper = document.createElement('div'); wrapper.className = 'condition-chip';
+    const text = document.createElement('span'); text.textContent = description;
+    const button = document.createElement('button'); button.textContent = '×'; button.setAttribute('aria-label', ariaLabel); button.title = ariaLabel; button.disabled = tab.pending;
+    button.onclick = remove; wrapper.append(text, button); $('conditionsBar').append(wrapper);
+  };
+  if (tab && tab.search) chip(`全体検索：${tab.search}`, () => { clearTimeout(tab.timer); tab.search = ''; $('search').value = ''; query(tab, true); }, '全体検索を解除');
+  if (tab) for (const [column, filter] of Object.entries(tab.filters)) {
+    const i = Number(column), name = r ? columnName(tab, i) || `列 ${i + 1}` : `列 ${i + 1}`;
+    const values = filter.values.slice(0, 3).map(value => value ? displayValue(tab, i, value) : '(空欄)').join('、');
+    const remaining = filter.values.length > 3 ? ` ほか${filter.values.length - 3}件` : '';
+    const description = `${i + 1}列目 ${name}${r && !visibleColumns(tab).includes(i) ? '（非表示）' : ''}：${filter.all ? '除外 ' : ''}${values || '選択なし（0行）'}${remaining}`;
+    chip(description, () => { delete tab.filters[column]; query(tab, true); }, `${i + 1}列目 ${name}のフィルタを解除`);
+  }
+  $('conditionsBar').hidden = !$('conditionsBar').children.length;
+}
+$('dismissSchemaNotice').onclick = () => { if (active) { active.schemaNotice = ''; renderScopeAndConditions(); } };
+function closeCellDetails(restoreFocus = true) {
+  const selected = cellSelection; cellSelection = null; $('cellDetails').hidden = true; $('cellText').value = ''; $('cellCopyStatus').textContent = '';
+  if (restoreFocus && selected && active === selected.tab) {
+    if (selected.element.isConnected) selected.element.focus(); else $('tableWrap').focus();
+  }
+}
+function showCellDetails(tab, number, column, value, element) {
+  if (tab !== active) return;
+  cellSelection = {tab, number, column, value, element}; $('cellDetails').hidden = false; $('cellText').value = value; $('cellCopyStatus').textContent = '';
+  $('cellDetailsTitle').textContent = `${tab.file.name} · CSV ${number}行目 · ${column + 1}列目 ${tab.result.headers[column]}`;
+}
+$('closeCell').onclick = () => closeCellDetails();
+$('copyCell').onclick = async () => {
+  const selected = cellSelection; if (!selected) return;
+  let copied = false;
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(selected.value); copied = true; } } catch (_) { /* Fall back to copying the selected text for local-file browsers. */ }
+  if (!copied && cellSelection === selected) {
+    $('cellText').focus(); $('cellText').select();
+    try { copied = !!document.execCommand('copy'); } catch (_) { /* Manual copy remains available. */ }
+  }
+  if (cellSelection === selected) $('cellCopyStatus').textContent = copied ? 'コピーしました。' : '自動コピーできませんでした。内容を選択して Ctrl / Cmd + C でコピーしてください。';
+};
+function changeReadLimit() {
+  const limited = $('readMode').value === 'limited';
+  $('rowLimitLabel').hidden = !limited;
+  const value = Number($('rowLimit').value);
+  if (limited && (!Number.isInteger(value) || value < 1 || value > 1000000)) {
+    message('読み込む行数は1〜1,000,000の整数で指定してください。', true); return;
+  }
+  defaultLimit = limited ? value : 0;
+  if (active && active.limit !== defaultLimit) { active.limit = defaultLimit; load(); }
+}
+$('readMode').onchange = $('rowLimit').onchange = changeReadLimit;
+function stepReadLimit(direction) {
+  const current = Number($('rowLimit').value);
+  $('rowLimit').value = Math.max(1, Math.min(1000000, (Number.isFinite(current) ? Math.round(current) : 100) + direction * 100));
+  changeReadLimit();
+}
+$('moreRows').onclick = () => stepReadLimit(1);
+$('fewerRows').onclick = () => stepReadLimit(-1);
+$('rowLimit').onkeydown = e => {
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); stepReadLimit(e.key === 'ArrowUp' ? 1 : -1); }
+};
+let reloadTarget = null;
+const pickerOptions = {multiple:true, types:[{description:'CSV / TSV', accept:{'text/csv':['.csv','.tsv','.txt']}}]};
+async function pickFiles() {
+  if (!window.showOpenFilePicker) { $('file').click(); return; }
+  try {
+    const handles = await window.showOpenFilePicker(pickerOptions);
+    const files = await Promise.all(handles.map(handle => handle.getFile()));
+    openFiles(files, handles);
+  } catch (error) {
+    if (error.name !== 'AbortError') { message('ファイル選択を利用できません。通常の選択画面から開いてください。', true); $('file').click(); }
+  }
+}
+function replaceTabFile(tab, file) {
+  if (!tabs.includes(tab) || !file) return;
+  if (!tab.limit && file.size > 50 * 1024 * 1024) { message('全行読み込みは50 MBまでです。「先頭のみ」を選んでください。', true); return; }
+  if (tab === active) { tab.scrollTop = $('tableWrap').scrollTop; tab.scrollLeft = $('tableWrap').scrollLeft; }
+  tab.file = file; renderTabs(); load(tab, true);
+}
+function reselectFile(tab) {
+  reloadTarget = tab; $('reloadFile').value = '';
+  message(`「${tab.file.name}」を選び直して再読み込みしてください。`); $('reloadFile').click();
+}
+async function reloadFile() {
+  const tab = active; if (!tab || tab.pending || tab.reloading) return;
+  if (!tab.hosted && !tab.handle) { reselectFile(tab); return; }
+  tab.reloadError = '';
+  tab.reloading = true; updateStatus();
+  try {
+    const file = tab.hosted ? await fetchDataset() : await tab.handle.getFile();
+    if (tab.hosted && !tab.limit && file.size > 50 * 1024 * 1024) {
+      throw new Error('全行読み込みは50 MBまでです');
+    }
+    replaceTabFile(tab, file);
+  } catch (error) {
+    if (tabs.includes(tab)) {
+      if (tab.hosted) tab.reloadError = `集計CSVを再読み込みできませんでした（${error.message}）。`;
+      else { tab.handle = null; reselectFile(tab); }
+    }
+  }
+  finally { tab.reloading = false; if (tab === active) updateStatus(); }
+}
+$('open').onclick = pickFiles;
+$('csvOptions').ontoggle = () => { if ($('csvOptions').open) $('columnsPanel').open = false; };
+$('reload').onclick = reloadFile;
+$('file').onchange = e => { openFiles(e.target.files); e.target.value = ''; };
+$('reloadFile').onchange = e => {
+  const tab = reloadTarget, file = e.target.files[0]; reloadTarget = null; e.target.value = '';
+  if (!tab || !tabs.includes(tab) || !file) return;
+  if (file.name !== tab.file.name) { message(`再読み込みする「${tab.file.name}」を選んでください。`, true); return; }
+  replaceTabFile(tab, file);
+};
+document.addEventListener('pointerdown', e => {
+  if (filterDialog && !$('filterPopup').contains(e.target) && e.target !== filterDialog.tab.filterButtons[filterDialog.column]) closeFilter(false);
+  if ($('columnsPanel').open && !$('columnsPanel').contains(e.target)) $('columnsPanel').open = false;
+  if ($('csvOptions').open && !$('csvOptions').contains(e.target)) $('csvOptions').open = false;
+});
+document.addEventListener('keydown', e => {
+  if ($('topicDialog').open) return;
+  if (e.key === 'Escape' && $('csvOptions').open) {
+    $('csvOptions').open = false;
+    $('csvOptions').querySelector('summary').focus();
+    return;
+  }
+  if (e.key === 'Escape' && filterDialog) { closeFilter(); return; }
+  if (e.key === 'Escape' && !$('cellDetails').hidden && !$('columnsPanel').open) { closeCellDetails(); return; }
+  if (e.key === 'Escape' && $('columnsPanel').open) { $('columnsPanel').open = false; $('columnsPanel').querySelector('summary').focus(); }
+});
+$('encoding').onchange = () => { if (active) { active.encoding = $('encoding').value; load(); } };
+$('delimiter').onchange = () => { if (active) { active.filters = {}; active.delimiter = $('delimiter').value; load(); } };
+$('header').onchange = () => { if (active) { closeFilter(false); active.filters = {}; active.header = $('header').checked; if (active.limit) { load(); return; } active.generation++; active.fits = {}; active.autoFit = true; active.sort = -1; query(active, true); } };
+$('search').oninput = () => {
+  const tab = active; if (!tab || !tab.ready) return;
+  tab.search = $('search').value; clearTimeout(tab.timer); tab.request++; tab.pending = true; updateStatus(); tab.timer = setTimeout(() => query(tab, true), 180);
+};
+$('prev').onclick = () => { if (active && !active.pending && active.page > 0) { active.page--; active.scrollTop = 0; query(); } };
+$('next').onclick = () => { if (active && !active.pending && active.result && active.page < active.result.pages - 1) { active.page++; active.scrollTop = 0; query(); } };
+$('showAll').onclick = () => { if (active) { active.hidden.clear(); renderTable(); renderColumnSettings(); updateStatus(); } };
+$('hideAll').onclick = () => { if (active && active.result) { active.hidden = new Set(active.result.headers.map((_,i) => i)); renderTable(); renderColumnSettings(); updateStatus(); } };
+$('resetWidths').onclick = () => { if (active && active.result) requestFit(active, active.result.headers.map((_,i) => i)); };
+$('tableWrap').onscroll = () => { if (active) { active.scrollTop = $('tableWrap').scrollTop; active.scrollLeft = $('tableWrap').scrollLeft; } };
+window.addEventListener('beforeunload', () => { tabs.forEach(t => t.worker.terminate()); URL.revokeObjectURL(workerURL); });
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); } });
+document.addEventListener('dragover', e => { e.preventDefault(); });
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+document.addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging'); openFiles(e.dataTransfer.files); });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); pickFiles(); } });
+renderActive();
+if (datasetURL) openDataset(false);
+</script>
+</body>
+</html>
+
