@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
-<meta name="description" content="18・100・200トピックのリカーリングトピック集計と質問・トピックの組み合わせを閲覧できます。">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; frame-src blob:; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="description" content="18・100・200トピックのリカーリングトピック集計、質問・トピックの組み合わせ、質問別トピック回帰表を閲覧できます。">
 <title>リカーリングトピック集計</title>
 <style>
 :root {
@@ -128,6 +128,7 @@ body.topic-source #message:not(.error) {
 .condition-chip span { padding: 3px 8px; max-width: min(360px, 70vw); max-height: 70px; overflow: auto; overflow-wrap: anywhere; font-size: .86rem; }
 .condition-chip button { min-height: 32px; border: 0; }
 main { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0 var(--gutter); }
+#reportFrame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--paper); }
 #empty { margin-block: auto; padding-block: 16px; max-width: 60ch; }
 #empty p { margin-block: 6px 12px; color: var(--muted); }
 #tableWrap { overflow: auto; flex: 1; border-top: 1px solid var(--ink); }
@@ -223,23 +224,24 @@ body.dragging #dropOverlay { display: grid; }
   <div>
     <h1 id="pageTitle">リカーリングトピック集計</h1>
     <p id="conditionLabel" hidden></p>
-    <p id="sourceFile" class="source-file">CSV未選択</p>
+    <p id="sourceFile" class="source-file">ファイル未選択</p>
   </div>
   <div class="dataset-controls">
-    <label>共有CSV<select id="datasetSelect" aria-label="閲覧する共有CSV"><option value="" disabled>CSV未選択</option></select></label>
+    <label>共有ファイル<select id="datasetSelect" aria-label="閲覧する共有ファイル"><option value="" disabled>ファイル未選択</option></select></label>
     <button id="downloadDataset" hidden>CSVを保存</button>
     <p id="datasetHint" role="status" aria-live="polite" hidden></p>
   </div>
 </header>
-<div id="tabs" class="tabs" role="tablist" aria-label="開いているCSV" hidden></div>
+<div id="tabs" class="tabs" role="tablist" aria-label="開いているファイル" hidden></div>
 <div class="toolbar">
   <div id="viewSwitcher" role="group" aria-label="表示形式" hidden>
     <button id="summaryView" aria-pressed="true">トピック一覧</button>
     <button id="rawView" aria-pressed="false">全列の表</button>
   </div>
-  <label class="search"><input id="search" type="search" placeholder="トピック名・語句を検索" aria-label="全列から検索" disabled></label>
+  <label id="searchLabel" class="search"><input id="search" type="search" placeholder="トピック名・語句を検索" aria-label="全列から検索" disabled></label>
   <div class="toolbar-actions">
-    <button id="open">CSVを開く</button>
+    <button id="open">ファイルを開く</button>
+    <button id="reportReload" hidden>再読み込み</button>
   <details id="csvOptions">
     <summary>読み込み設定</summary>
     <div id="csvMenu">
@@ -247,7 +249,7 @@ body.dragging #dropOverlay { display: grid; }
 <label>文字コード<select id="encoding"><option value="auto">自動判定</option><option value="utf-8">UTF-8</option><option value="shift_jis">Shift_JIS / CP932</option><option value="euc-jp">EUC-JP</option><option value="utf-16le">UTF-16 LE</option><option value="utf-16be">UTF-16 BE</option></select></label>
 <label>区切り<select id="delimiter"><option value="auto">自動判定</option><option value=",">カンマ</option><option value="tab">タブ</option><option value=";">セミコロン</option></select></label>
 <label><input id="header" type="checkbox" checked>先頭行を見出しにする</label>
-      <button id="reload" disabled>再読み込み</button><input type="file" id="reloadFile" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden><input type="file" id="file" multiple accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" hidden>
+      <button id="reload" disabled>再読み込み</button><input type="file" id="reloadFile" accept=".csv,.tsv,.txt,.html,.htm,text/csv,text/tab-separated-values,text/html" hidden><input type="file" id="file" multiple accept=".csv,.tsv,.txt,.html,.htm,text/csv,text/tab-separated-values,text/html" hidden>
     </div>
   </details>
   <details id="columnsPanel"><summary>列の設定</summary><div id="columnMenu"><div class="column-actions"><button id="showAll">すべて表示</button><button id="hideAll">すべて非表示</button><button id="resetWidths">幅をリセット</button></div><div class="column-help">見出しの右端で列幅を調整できます。ダブルクリックすると内容に合わせます。</div><div id="columnList">ファイルを開くと設定できます。</div></div></details>
@@ -264,10 +266,11 @@ body.dragging #dropOverlay { display: grid; }
 </div>
 <main id="main" aria-busy="false">
   <div id="empty">
-    <h2 id="emptyTitle">CSVを開く</h2>
-    <p id="emptyNote">「CSVを開く」からファイルを選ぶか、ここにドロップしてください。</p>
-    <button id="openDataset" class="primary" hidden>集計CSVを読み込む</button>
+    <h2 id="emptyTitle">ファイルを開く</h2>
+    <p id="emptyNote">「ファイルを開く」から選ぶか、ここにドロップしてください。</p>
+    <button id="openDataset" class="primary" hidden>共有ファイルを読み込む</button>
   </div>
+  <iframe id="reportFrame" title="質問別トピック回帰表" sandbox="allow-scripts" hidden></iframe>
 <div id="tableWrap" hidden tabindex="0" role="region" aria-label="CSVの表"><table id="table" aria-label="CSVデータ"><colgroup id="colgroup"></colgroup><thead id="head"></thead><tbody id="body"></tbody></table></div><aside id="cellDetails" aria-labelledby="cellDetailsTitle" hidden><div id="cellDetailsHeader"><h2 id="cellDetailsTitle">セルの内容</h2><div><button id="copyCell">内容をコピー</button><button id="closeCell">閉じる</button></div></div><textarea id="cellText" readonly aria-label="セルの全文" spellcheck="false"></textarea><span id="cellCopyStatus" role="status"></span></aside></main>
 <footer id="footer" hidden>
   <span id="info"></span>
@@ -290,7 +293,7 @@ body.dragging #dropOverlay { display: grid; }
   </div>
   <div id="topicContent"></div>
 </dialog>
-<noscript>CSVを表示するにはJavaScriptを有効にしてください。</noscript>
+<noscript>ファイルを表示するにはJavaScriptを有効にしてください。</noscript>
 <script>
 'use strict';
 // Parser and worker share no libraries; this file works directly via file://.
@@ -483,12 +486,13 @@ let defaultLimit = 0;
 let filterDialog = null, filterToken = 0;
 let cellSelection = null;
 
-// 公開するCSVと分析条件をここに登録する。異なる条件のTopic番号は混同しない。
+// 公開するファイルと分析条件をここに登録する。異なる条件のTopic番号は混同しない。
 const DATASETS = [
   {id:'18', label:'18トピック', name:'リカーリングトピック集計_18トピック.csv', condition:'K18_N5000_B4000'},
   {id:'100', label:'100トピック', name:'リカーリングトピック集計_100トピック.csv', condition:'K100_N3000_B1500'},
   {id:'200', label:'200トピック', name:'リカーリングトピック集計_200トピック.csv', condition:'K200_N5500_B3500'},
   {id:'pairs', label:'質問・トピックの組み合わせ', name:'0085_50_組み合わせ.csv'},
+  {id:'regression', label:'質問別トピック回帰表（18トピック）', name:'0085_55_00231_K18_N5000_B4000_質問別トピック回帰表.html', kind:'html', condition:'K18_N5000_B4000'},
 ];
 const PAIR_COLUMNS = ['condition','question','topic','question_text','matching_words'];
 const PAIR_LABELS = ['分析条件','質問ID','トピック','質問内容','対応語'];
@@ -687,36 +691,42 @@ $('closeTopic').onclick = () => $('topicDialog').close();
 function updateDatasetUI(tab, result) {
   const topic = !!tab?.topic;
   const pairs = !!tab?.combination;
+  const report = !!tab?.report;
   const summary = topic && isSummary(tab);
   document.body.classList.toggle('topic-source', topic || pairs);
   $('tableWrap').classList.toggle('topic-summary', summary);
   $('tableWrap').classList.toggle('combination-table', pairs);
-  $('pageTitle').textContent = pairs ? '質問・トピックの組み合わせ' : 'リカーリングトピック集計';
+  $('pageTitle').textContent = report ? (datasetForTab(tab)?.label || 'HTMLレポート') : pairs ? '質問・トピックの組み合わせ' : 'リカーリングトピック集計';
   document.title = $('pageTitle').textContent;
-  const condition = topic ? datasetForTab(tab)?.condition : null;
+  const condition = topic || report ? datasetForTab(tab)?.condition : null;
   $('conditionLabel').textContent = condition || '';
   $('conditionLabel').hidden = !condition;
   $('viewSwitcher').hidden = !topic;
+  $('searchLabel').hidden = report;
+  $('csvOptions').hidden = report;
+  $('reportReload').hidden = !report;
+  $('reportReload').disabled = !report || tab.reloading;
   $('summaryView').setAttribute('aria-pressed', String(summary));
   $('rawView').setAttribute('aria-pressed', String(topic && !summary));
   $('columnsPanel').hidden = summary || !result;
   if (summary) $('columnsPanel').open = false;
   $('datasetLine').hidden = !(topic || pairs) || !result;
   $('topicHint').hidden = !summary;
-  $('downloadDataset').hidden = !(topic || pairs) || !result;
-  $('sourceFile').textContent = tab?.file.name || datasetLoading?.name || 'CSV未選択';
-  $('datasetSelect').options[0].textContent = tab && !tab.dataset ? 'ローカルCSVを表示中' : 'CSV未選択';
+  $('downloadDataset').hidden = !(report || ((topic || pairs) && result));
+  $('downloadDataset').textContent = report ? 'HTMLを保存' : 'CSVを保存';
+  $('sourceFile').textContent = tab?.file.name || datasetLoading?.name || 'ファイル未選択';
+  $('datasetSelect').options[0].textContent = tab && !tab.dataset ? 'ローカルファイルを表示中' : 'ファイル未選択';
   $('datasetSelect').value = datasetLoading?.id || tab?.dataset?.id || '';
   $('datasetSelect').disabled = !canFetchDatasets || !!datasetLoading;
   $('datasetHint').textContent = datasetLoading ? `${datasetLoading.label}を読み込み中…` :
-    !canFetchDatasets ? '共有CSVの切り替えはWeb公開時に利用できます。' : '';
+    !canFetchDatasets ? '共有ファイルの切り替えはWeb公開時に利用できます。' : '';
   $('datasetHint').hidden = !$('datasetHint').textContent;
   $('openDataset').hidden = !canFetchDatasets || !!datasetLoading;
-  $('openDataset').textContent = datasetError ? 'もう一度読み込む' : '共有CSVを読み込む';
-  $('emptyTitle').textContent = datasetLoading ? '共有CSVを読み込み中…' : 'CSVを開く';
+  $('openDataset').textContent = datasetError ? 'もう一度読み込む' : '共有ファイルを読み込む';
+  $('emptyTitle').textContent = datasetLoading ? '共有ファイルを読み込み中…' : 'ファイルを開く';
   $('emptyNote').textContent = datasetError
-    ? 'HTMLとCSVを同じフォルダーに置いてください。「CSVを開く」から手動で選ぶこともできます。'
-    : datasetLoading ? '' : '「CSVを開く」からファイルを選ぶか、ここにドロップしてください。';
+    ? '公開するファイルを同じフォルダーに置いてください。「ファイルを開く」から手動で選ぶこともできます。'
+    : datasetLoading ? '' : '「ファイルを開く」からファイルを選ぶか、ここにドロップしてください。';
   if ((topic || pairs) && result) {
     const total = `${result.limit ? '読み込み範囲 ' : '全'}${localeNumber.format(result.total)}件`;
     $('datasetScope').textContent = result.matched === result.total ? total : `${total}のうち ${localeNumber.format(result.matched)}件を表示`;
@@ -750,12 +760,12 @@ async function fetchDataset(dataset) {
   const datasetURL = new URL(encodeURIComponent(dataset.name), window.location.href);
   const response = await fetch(datasetURL, {cache:'no-cache', mode:'same-origin'});
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  if (response.headers.get('Content-Type')?.toLowerCase().includes('text/html')) {
+  if (dataset.kind !== 'html' && response.headers.get('Content-Type')?.toLowerCase().includes('text/html')) {
     throw new Error('CSVのURLからHTMLが返されました');
   }
   const blob = await response.blob();
-  if (!blob.size) throw new Error('CSVが空です');
-  return new File([blob], dataset.name, {type:'text/csv'});
+  if (!blob.size) throw new Error('ファイルが空です');
+  return new File([blob], dataset.name, {type:dataset.kind === 'html' ? 'text/html;charset=utf-8' : 'text/csv'});
 }
 
 async function openDataset(id = lastDataset.id, activate = true) {
@@ -771,10 +781,10 @@ async function openDataset(id = lastDataset.id, activate = true) {
   try {
     const file = await fetchDataset(dataset);
     if (!openFiles([file], [], {dataset, select:activate || !active})) {
-      throw new Error('CSVが50 MBを超えています');
+      throw new Error('ファイルが50 MBを超えています');
     }
   } catch (error) {
-    datasetError = `「${dataset.label}」のCSVを読み込めませんでした（${error.message}）。HTMLとCSVが同じフォルダーにあるか確認してください。`;
+    datasetError = `「${dataset.label}」を読み込めませんでした（${error.message}）。ファイルが同じフォルダーにあるか確認してください。`;
   } finally {
     datasetLoading = null;
     updateStatus();
@@ -783,7 +793,7 @@ async function openDataset(id = lastDataset.id, activate = true) {
 $('datasetSelect').onchange = () => openDataset($('datasetSelect').value);
 $('openDataset').onclick = () => openDataset();
 $('downloadDataset').onclick = () => {
-  if (!active?.result) return;
+  if (!active || (!active.result && !active.report)) return;
   const file = active.file;
   const url = URL.createObjectURL(file);
   const link = document.createElement('a');
@@ -826,16 +836,26 @@ function selectTab(tab) {
   datasetError = '';
   if (tab?.dataset) lastDataset = tab.dataset;
   if (active) { active.scrollTop = $('tableWrap').scrollTop; active.scrollLeft = $('tableWrap').scrollLeft; }
-  active = tab; if (tab) defaultLimit = tab.limit; document.body.classList.remove('resizing'); $('columnsPanel').open = false; $('csvOptions').open = false; renderTabs(); renderActive();
+  active = tab; if (tab && !tab.report) defaultLimit = tab.limit; document.body.classList.remove('resizing'); $('columnsPanel').open = false; $('csvOptions').open = false; renderTabs(); renderActive();
+}
+function reportURL(file) {
+  // Keep the original HTML and its styles/scripts in an isolated browsing context.
+  return URL.createObjectURL(new Blob([file], {type:'text/html;charset=utf-8'}));
+}
+function releaseTab(tab) {
+  clearTimeout(tab.timer);
+  tab.worker?.terminate();
+  if (tab.reportURL) URL.revokeObjectURL(tab.reportURL);
 }
 function closeTab(tab) {
   const index = tabs.indexOf(tab); if (index < 0) return;
-  clearTimeout(tab.timer); tab.worker.terminate(); tabs.splice(index, 1);
+  if (tab.reportURL && $('reportFrame').getAttribute('src') === tab.reportURL) $('reportFrame').removeAttribute('src');
+  releaseTab(tab); tabs.splice(index, 1);
   if (active === tab) { active = null; selectTab(tabs[Math.min(index, tabs.length - 1)] || null); }
   else renderTabs();
 }
 function query(tab = active, reset = false) {
-  if (!tab || !tab.ready) return;
+  if (!tab || !tab.ready || tab.report) return;
   if (tab === active) closeCellDetails(false);
   if (filterDialog && filterDialog.tab === tab) closeFilter(false);
   if (reset) { tab.page = 0; tab.scrollTop = 0; }
@@ -843,7 +863,7 @@ function query(tab = active, reset = false) {
   tab.worker.postMessage({type:'query', id:++tab.request, header:tab.header, search:tab.search, sort:tab.sort, direction:tab.direction, page:tab.page, probabilitySort:tab.topic && PROBABILITY_COLUMNS.has(tab.sort), filters:tab.filters});
 }
 function load(tab = active, preserve = false) {
-  if (!tab) return;
+  if (!tab || tab.report) return;
   if (tab === active) closeCellDetails(false);
   tab.schemaNotice = '';
   tab.reloadError = '';
@@ -855,13 +875,16 @@ function load(tab = active, preserve = false) {
 }
 function openFiles(files, handles = [], {dataset = null, select = true} = {}) {
   let last = null, rejected = 0;
-  const limit = dataset ? 0 : defaultLimit;
   for (const [index, file] of Array.from(files).entries()) {
+    const report = dataset?.kind === 'html' || /\.html?$/i.test(file.name);
+    const limit = dataset || report ? 0 : defaultLimit;
     if (!limit && file.size > 50 * 1024 * 1024) { rejected++; continue; }
-    const tab = {id:++nextTabId, file, handle:handles[index] || null, reloading:false, reloadError:'', worker:new Worker(workerURL), ready:false, pending:true, request:0,
+    const tab = {id:++nextTabId, file, handle:handles[index] || null, reloading:false, reloadError:'', worker:report ? null : new Worker(workerURL), ready:report, pending:!report, request:0,
+      report, reportURL:report ? reportURL(file) : null,
       dataset, topic:false, combination:false, view:'summary', limit, encoding:'auto', delimiter:'auto', header:true, search:'', sort:-1, direction:1, page:0, result:null,
       schema:null, schemaNotice:'', filters:{}, filterButtons:{}, widths:{}, manualWidths:new Set(), fits:{}, fitSequence:0, generation:0, autoFit:true, hidden:new Set(), scrollTop:0, scrollLeft:0, error:'', timer:null};
     tabs.push(tab); last = tab;
+    if (report) continue;
     tab.worker.onmessage = ({data:r}) => {
       if (!tabs.includes(tab)) return;
       if (r.type === 'filterValues') { receiveFilterValues(tab, r); return; }
@@ -901,7 +924,7 @@ function updateStatus() {
   $('clearFilters').hidden = !filterCount; $('clearFilters').disabled = !tab || tab.pending;
   $('clearFilters').textContent = `列フィルタを解除（${filterCount}列）`;
   renderScopeAndConditions();
-  $('search').disabled = !tab || !tab.ready;
+  $('search').disabled = !tab || !tab.ready || tab.report;
   $('footer').hidden = !r;
   $('pagination').hidden = !r || r.pages < 2;
   $('prev').disabled = !r || tab.pending || tab.page === 0;
@@ -911,10 +934,11 @@ function updateStatus() {
   $('info').textContent = r ? `${visibleColumns(tab).length} / ${r.headers.length} 列表示` : '';
   if (datasetError) message(datasetError, true);
   else if (!tab) message('');
-  else if (tab.reloading) message('CSVを再読み込み中…');
+  else if (tab.reloading) message('ファイルを再読み込み中…');
   else if (tab.reloadError || tab.error) message(tab.reloadError || tab.error, true);
   else if (tab.pending) message(tab.ready ? '表示を更新中…' : `${tab.file.name} を読み込み中…`);
   else if (r) message(r.warning || `${r.limit ? `先頭${r.limit.toLocaleString()}データ行まで読み込み（見出しは別・全体件数は未集計） · ` : ''}${r.encoding.toUpperCase()} / ${r.delimiter === '\t' ? 'タブ' : r.delimiter === ';' ? 'セミコロン' : 'カンマ'}区切り · 見出しをクリックで並べ替え · 右端をドラッグで列幅変更`, !!r.warning);
+  else message('');
 }
 function renderActive() {
   const tab = active;
@@ -923,7 +947,7 @@ function renderActive() {
   $('rowLimitLabel').hidden = $('readMode').value !== 'limited';
   if (tab && tab.limit) $('rowLimit').value = tab.limit;
   $('header').checked = tab ? tab.header : true; $('search').value = tab ? tab.search : '';
-  for (const id of ['encoding','delimiter','header']) $(id).disabled = !tab;
+  for (const id of ['encoding','delimiter','header']) $(id).disabled = !tab || tab.report;
   if (tab && !$('tabs').hidden) {
     $('main').setAttribute('role', 'tabpanel');
     $('main').setAttribute('aria-labelledby', `tab-${tab.id}`);
@@ -932,6 +956,9 @@ function renderActive() {
     $('main').removeAttribute('aria-labelledby');
   }
   $('empty').hidden = !!tab; $('tableWrap').hidden = !tab || !tab.result;
+  const frame = $('reportFrame');
+  frame.hidden = !tab?.report;
+  if (tab?.report && frame.getAttribute('src') !== tab.reportURL) frame.src = tab.reportURL;
   updateStatus(); renderTable(); renderColumnSettings();
 }
 function applyWidths() {
@@ -1143,7 +1170,7 @@ $('filterCancel').onclick = () => closeFilter();
 $('clearFilters').onclick = () => { if (active) { active.filters = {}; closeFilter(false); query(active, true); } };
 function renderScopeAndConditions() {
   const tab = active, r = tab && tab.result;
-  $('scopeBar').hidden = !tab; $('scopeBar').classList.toggle('limited', !!tab && tab.limit > 0);
+  $('scopeBar').hidden = !tab || tab.report; $('scopeBar').classList.toggle('limited', !!tab && !tab.report && tab.limit > 0);
   if (tab) {
     $('scopeBadge').textContent = tab.limit ? `読み込み対象：先頭 ${tab.limit.toLocaleString()} データ行まで${tab.header ? '（見出しは別）' : '（見出しなし）'}` : '読み込み対象：全行';
     $('scopeNote').textContent = r ? `${r.total.toLocaleString()} データ行を読み込み済み。検索・フィルタ・並べ替えはこの範囲が対象です。` : tab.pending ? '読み込み中…' : 'まだ読み込めていません。';
@@ -1211,7 +1238,7 @@ $('rowLimit').onkeydown = e => {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); stepReadLimit(e.key === 'ArrowUp' ? 1 : -1); }
 };
 let reloadTarget = null;
-const pickerOptions = {multiple:true, types:[{description:'CSV / TSV', accept:{'text/csv':['.csv','.tsv','.txt']}}]};
+const pickerOptions = {multiple:true, types:[{description:'CSV / TSV', accept:{'text/csv':['.csv','.tsv','.txt']}},{description:'HTML', accept:{'text/html':['.html','.htm']}}]};
 async function pickFiles() {
   if (!window.showOpenFilePicker) { $('file').click(); return; }
   try {
@@ -1225,6 +1252,16 @@ async function pickFiles() {
 function replaceTabFile(tab, file) {
   if (!tabs.includes(tab) || !file) return;
   if (!tab.limit && file.size > 50 * 1024 * 1024) { message('全行読み込みは50 MBまでです。「先頭のみ」を選んでください。', true); return; }
+  if (tab.report) {
+    const oldURL = tab.reportURL;
+    tab.file = file;
+    tab.reportURL = reportURL(file);
+    if ($('reportFrame').getAttribute('src') === oldURL) $('reportFrame').src = tab.reportURL;
+    URL.revokeObjectURL(oldURL);
+    renderTabs();
+    if (tab === active) renderActive();
+    return;
+  }
   if (tab === active) { tab.scrollTop = $('tableWrap').scrollTop; tab.scrollLeft = $('tableWrap').scrollLeft; }
   tab.file = file; renderTabs(); load(tab, true);
 }
@@ -1246,7 +1283,7 @@ async function reloadFile() {
     replaceTabFile(tab, file);
   } catch (error) {
     if (tabs.includes(tab)) {
-      if (tab.dataset) tab.reloadError = `集計CSVを再読み込みできませんでした（${error.message}）。`;
+      if (tab.dataset) tab.reloadError = `ファイルを再読み込みできませんでした（${error.message}）。`;
       else { tab.handle = null; reselectFile(tab); }
     }
   }
@@ -1255,6 +1292,7 @@ async function reloadFile() {
 $('open').onclick = pickFiles;
 $('csvOptions').ontoggle = () => { if ($('csvOptions').open) $('columnsPanel').open = false; };
 $('reload').onclick = reloadFile;
+$('reportReload').onclick = reloadFile;
 $('file').onchange = e => { openFiles(e.target.files); e.target.value = ''; };
 $('reloadFile').onchange = e => {
   const tab = reloadTarget, file = e.target.files[0]; reloadTarget = null; e.target.value = '';
@@ -1291,7 +1329,7 @@ $('showAll').onclick = () => { if (active) { active.hidden.clear(); renderTable(
 $('hideAll').onclick = () => { if (active && active.result) { active.hidden = new Set(active.result.headers.map((_,i) => i)); renderTable(); renderColumnSettings(); updateStatus(); } };
 $('resetWidths').onclick = () => { if (active && active.result) requestFit(active, active.result.headers.map((_,i) => i)); };
 $('tableWrap').onscroll = () => { if (active) { active.scrollTop = $('tableWrap').scrollTop; active.scrollLeft = $('tableWrap').scrollLeft; } };
-window.addEventListener('beforeunload', () => { tabs.forEach(t => t.worker.terminate()); URL.revokeObjectURL(workerURL); });
+window.addEventListener('beforeunload', () => { tabs.forEach(releaseTab); URL.revokeObjectURL(workerURL); });
 let dragDepth = 0;
 document.addEventListener('dragenter', e => { if (Array.from(e.dataTransfer.types).includes('Files')) { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); } });
 document.addEventListener('dragover', e => { e.preventDefault(); });
