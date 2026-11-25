@@ -6,17 +6,19 @@
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
-<meta name="description" content="リカーリングトピックの一覧とシード別の結果を閲覧できます。">
+<meta name="description" content="18・100・200トピックのリカーリングトピック集計と質問・トピックの組み合わせを閲覧できます。">
 <title>リカーリングトピック集計</title>
 <style>
 :root {
   color-scheme: light;
   --paper: #fff;
-  --ink: #161616;
-  --muted: #4a4a4a;
-  --line: #767676;
-  --gutter: clamp(14px, 3vw, 40px);
-  font: 14px/1.5 "Inter", "Noto Sans JP", system-ui, sans-serif;
+  --ink: #111;
+  --muted: #444;
+  --line: #bbb;
+  --row-line: #ddd;
+  --table-head: #f4f4f4;
+  --gutter: clamp(1rem, 4vw, 3rem);
+  font: 1rem/1.6 system-ui, sans-serif;
   color: var(--ink);
   background: var(--paper);
 }
@@ -24,7 +26,8 @@
 [hidden] { display: none !important; }
 ::selection { background: var(--ink); color: var(--paper); }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-body { margin: 0; height: 100dvh; min-height: 480px; display: flex; flex-direction: column; }
+body { margin: 0 auto; max-width: 82rem; height: 100dvh; min-height: 480px; display: flex; flex-direction: column; }
+a { color: inherit; text-underline-offset: .2em; }
 header, .toolbar, .tabs, #message, #scopeBar, #schemaNotice, #conditionsBar, #datasetLine, footer {
   padding-inline: var(--gutter);
 }
@@ -37,10 +40,11 @@ header {
   padding-block: 22px 16px;
   border-bottom: 1px solid var(--ink);
 }
-h1 { margin: 0; font-size: 1.75rem; line-height: 1.25; letter-spacing: -.02em; }
+h1 { margin: 0; font-size: 2rem; line-height: 1.25; letter-spacing: -.02em; }
 h2 { margin: 0; font-size: 1.25rem; line-height: 1.35; }
 p { margin: 0; }
 .source-file { margin-top: 5px; color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }
+#conditionLabel { margin-top: 4px; font: .86rem/1.6 ui-monospace, monospace; }
 .dataset-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 #datasetSelect { min-width: 124px; }
 #datasetHint { flex-basis: 100%; color: var(--muted); font-size: .86rem; }
@@ -128,14 +132,15 @@ main { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0
 #empty p { margin-block: 6px 12px; color: var(--muted); }
 #tableWrap { overflow: auto; flex: 1; border-top: 1px solid var(--ink); }
 #table { table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .93rem; font-variant-numeric: tabular-nums; }
-.topic-summary #table { min-width: 100%; }
+.topic-summary #table, .combination-table #table { min-width: 100%; }
 #table th, #table td { height: 38px; text-align: left; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-#table th { position: sticky; top: 0; z-index: 2; padding: 0; border-bottom: 1px solid var(--ink); background: var(--paper); }
-#table td { padding: 0 11px; border-bottom: 1px solid var(--line); }
+#table th { position: sticky; top: 0; z-index: 2; padding: 0; border-bottom: 1px solid var(--line); background: var(--table-head); }
+#table td { padding: .32rem .65rem; border-bottom: 1px solid var(--row-line); }
 #table th:first-child, #table td:first-child { position: sticky; left: 0; text-align: center; color: var(--muted); background: var(--paper); }
 #table td:first-child { z-index: 1; }
-#table th:first-child { z-index: 3; }
-#table th button { border: 0; border-radius: 0; min-height: 34px; }
+#table th:first-child { z-index: 3; background: var(--table-head); }
+#table td.wrapped { white-space: normal; overflow-wrap: anywhere; line-height: 1.45; vertical-align: top; }
+#table th button { border: 0; border-radius: 0; min-height: 34px; background: var(--table-head); }
 #table th .sort-button { width: calc(100% - 34px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 3px 4px 11px; text-align: left; }
 #table th .filter-button { position: absolute; right: 8px; top: 0; bottom: 0; width: 26px; padding: 0; }
 #table th .filter-button.filtered { outline: 1px solid var(--ink); outline-offset: -3px; font-weight: 700; }
@@ -197,8 +202,8 @@ body.dragging #dropOverlay { display: grid; }
 .word-support small { margin-left: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .seed-table-wrap { overflow: auto; }
 .seed-table { width: 100%; min-width: 440px; border-collapse: collapse; font-size: .93rem; font-variant-numeric: tabular-nums; }
-.seed-table th, .seed-table td { padding: 7px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
-.seed-table th { border-bottom-color: var(--ink); }
+.seed-table th, .seed-table td { padding: .32rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--row-line); }
+.seed-table th { background: var(--table-head); border-bottom-color: var(--line); }
 .seed-table th:nth-child(-n+3) { white-space: nowrap; }
 .seed-table td:last-child { overflow-wrap: anywhere; }
 @media (max-width: 680px) {
@@ -215,10 +220,14 @@ body.dragging #dropOverlay { display: grid; }
 </head>
 <body>
 <header>
-  <div><h1 id="pageTitle">リカーリングトピック集計</h1><p id="sourceFile" class="source-file">CSV未選択</p></div>
+  <div>
+    <h1 id="pageTitle">リカーリングトピック集計</h1>
+    <p id="conditionLabel" hidden></p>
+    <p id="sourceFile" class="source-file">CSV未選択</p>
+  </div>
   <div class="dataset-controls">
     <label>共有CSV<select id="datasetSelect" aria-label="閲覧する共有CSV"><option value="" disabled>CSV未選択</option></select></label>
-    <button id="downloadDataset" hidden>集計CSVを保存</button>
+    <button id="downloadDataset" hidden>CSVを保存</button>
     <p id="datasetHint" role="status" aria-live="polite" hidden></p>
   </div>
 </header>
@@ -474,11 +483,16 @@ let defaultLimit = 0;
 let filterDialog = null, filterToken = 0;
 let cellSelection = null;
 
-// Add entries here when publishing additional CSV files alongside index.html.
+// 公開するCSVと分析条件をここに登録する。異なる条件のTopic番号は混同しない。
 const DATASETS = [
-  {id:'18', label:'18トピック', name:'0050_62_00231_リカーリングトピック集計_18トピック.csv'},
-  {id:'200', label:'200トピック', name:'0050_62_00231_リカーリングトピック集計_200トピック.csv'},
+  {id:'18', label:'18トピック', name:'リカーリングトピック集計_18トピック.csv', condition:'K18_N5000_B4000'},
+  {id:'100', label:'100トピック', name:'リカーリングトピック集計_100トピック.csv', condition:'K100_N3000_B1500'},
+  {id:'200', label:'200トピック', name:'リカーリングトピック集計_200トピック.csv', condition:'K200_N5500_B3500'},
+  {id:'pairs', label:'質問・トピックの組み合わせ', name:'0085_50_組み合わせ.csv'},
 ];
+const PAIR_COLUMNS = ['condition','question','topic','question_text','matching_words'];
+const PAIR_LABELS = ['分析条件','質問ID','トピック','質問内容','対応語'];
+const PAIR_WIDTHS = [190,145,125,380,300];
 const TOPIC_COLUMNS = [
   "recurring_topic",
   "group_id",
@@ -505,10 +519,10 @@ const PROBABILITY_COLUMNS = new Set([4, 10, 11, 12, 13]);
 const SUMMARY_COLUMNS = [
   {index:0, label:'トピック', width:104},
   {index:4, label:'一致率', width:106, format:'match'},
-  {index:8, label:'代表上位語', width:252},
-  {index:18, label:'共通NPMI上位語', width:238},
-  {index:10, label:'平均事前確率', width:148, format:'probability'},
-  {index:11, label:'事前確率の標準偏差', width:184, format:'probability'},
+  {index:8, label:'代表上位語', width:296},
+  {index:18, label:'共通NPMI上位語', width:270},
+  {index:10, label:'平均事前確率', width:152, format:'probability'},
+  {index:11, label:'事前確率の標準偏差', width:206, format:'probability'},
 ];
 const SUMMARY_BY_INDEX = new Map(SUMMARY_COLUMNS.map(column => [column.index, column]));
 const matchPercent = new Intl.NumberFormat('ja-JP', {style:'percent', maximumFractionDigits:1});
@@ -519,13 +533,20 @@ function hasTopicSchema(schema) {
   return schema?.header && schema.columns === TOPIC_COLUMNS.length &&
     TOPIC_COLUMNS.every((name, index) => schema.names?.[index] === name);
 }
+function hasPairSchema(schema) {
+  return schema?.header && schema.columns === PAIR_COLUMNS.length &&
+    PAIR_COLUMNS.every((name, index) => schema.names?.[index] === name);
+}
+function datasetForTab(tab) {
+  return tab?.dataset || DATASETS.find(item => item.name === tab?.file.name) || null;
+}
 function isSummary(tab) { return tab.topic && tab.view === 'summary'; }
 function visibleColumns(tab) {
   return isSummary(tab) ? SUMMARY_COLUMNS.map(column => column.index) :
     tab.result.headers.map((_, index) => index).filter(index => !tab.hidden.has(index));
 }
 function columnName(tab, column) {
-  return (isSummary(tab) && SUMMARY_BY_INDEX.get(column)?.label) || tab.result.headers[column];
+  return (isSummary(tab) && SUMMARY_BY_INDEX.get(column)?.label) || (tab.combination && PAIR_LABELS[column]) || tab.result.headers[column];
 }
 function formatPercent(value, formatter) {
   if (value === undefined || value === null || String(value).trim() === '') return '—';
@@ -665,17 +686,24 @@ $('closeTopic').onclick = () => $('topicDialog').close();
 
 function updateDatasetUI(tab, result) {
   const topic = !!tab?.topic;
+  const pairs = !!tab?.combination;
   const summary = topic && isSummary(tab);
-  document.body.classList.toggle('topic-source', topic);
+  document.body.classList.toggle('topic-source', topic || pairs);
   $('tableWrap').classList.toggle('topic-summary', summary);
+  $('tableWrap').classList.toggle('combination-table', pairs);
+  $('pageTitle').textContent = pairs ? '質問・トピックの組み合わせ' : 'リカーリングトピック集計';
+  document.title = $('pageTitle').textContent;
+  const condition = topic ? datasetForTab(tab)?.condition : null;
+  $('conditionLabel').textContent = condition || '';
+  $('conditionLabel').hidden = !condition;
   $('viewSwitcher').hidden = !topic;
   $('summaryView').setAttribute('aria-pressed', String(summary));
   $('rawView').setAttribute('aria-pressed', String(topic && !summary));
   $('columnsPanel').hidden = summary || !result;
   if (summary) $('columnsPanel').open = false;
-  $('datasetLine').hidden = !topic || !result;
+  $('datasetLine').hidden = !(topic || pairs) || !result;
   $('topicHint').hidden = !summary;
-  $('downloadDataset').hidden = !topic || !result;
+  $('downloadDataset').hidden = !(topic || pairs) || !result;
   $('sourceFile').textContent = tab?.file.name || datasetLoading?.name || 'CSV未選択';
   $('datasetSelect').options[0].textContent = tab && !tab.dataset ? 'ローカルCSVを表示中' : 'CSV未選択';
   $('datasetSelect').value = datasetLoading?.id || tab?.dataset?.id || '';
@@ -684,12 +712,12 @@ function updateDatasetUI(tab, result) {
     !canFetchDatasets ? '共有CSVの切り替えはWeb公開時に利用できます。' : '';
   $('datasetHint').hidden = !$('datasetHint').textContent;
   $('openDataset').hidden = !canFetchDatasets || !!datasetLoading;
-  $('openDataset').textContent = datasetError ? 'もう一度読み込む' : '集計CSVを読み込む';
-  $('emptyTitle').textContent = datasetLoading ? '集計CSVを読み込み中…' : 'CSVを開く';
+  $('openDataset').textContent = datasetError ? 'もう一度読み込む' : '共有CSVを読み込む';
+  $('emptyTitle').textContent = datasetLoading ? '共有CSVを読み込み中…' : 'CSVを開く';
   $('emptyNote').textContent = datasetError
     ? 'HTMLとCSVを同じフォルダーに置いてください。「CSVを開く」から手動で選ぶこともできます。'
     : datasetLoading ? '' : '「CSVを開く」からファイルを選ぶか、ここにドロップしてください。';
-  if (topic && result) {
+  if ((topic || pairs) && result) {
     const total = `${result.limit ? '読み込み範囲 ' : '全'}${localeNumber.format(result.total)}件`;
     $('datasetScope').textContent = result.matched === result.total ? total : `${total}のうち ${localeNumber.format(result.matched)}件を表示`;
   }
@@ -746,7 +774,7 @@ async function openDataset(id = lastDataset.id, activate = true) {
       throw new Error('CSVが50 MBを超えています');
     }
   } catch (error) {
-    datasetError = `「${dataset.label}」の集計CSVを読み込めませんでした（${error.message}）。HTMLとCSVが同じフォルダーにあるか確認してください。`;
+    datasetError = `「${dataset.label}」のCSVを読み込めませんでした（${error.message}）。HTMLとCSVが同じフォルダーにあるか確認してください。`;
   } finally {
     datasetLoading = null;
     updateStatus();
@@ -767,15 +795,16 @@ $('downloadDataset').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 };
 
-function columnWidth(tab, i) { return isSummary(tab) ? SUMMARY_BY_INDEX.get(i).width : tab.widths[i] || DEFAULT_WIDTH; }
+function columnWidth(tab, i) { return isSummary(tab) ? SUMMARY_BY_INDEX.get(i).width : tab.widths[i] || (tab.combination ? PAIR_WIDTHS[i] : DEFAULT_WIDTH); }
 function clampWidth(value) { return Math.max(60, Math.min(1200, Math.round(Number(value) || DEFAULT_WIDTH))); }
 function message(text, error = false) { $('message').textContent = text; $('message').hidden = !text; $('message').classList.toggle('error', error); }
 function renderTabs() {
-  $('tabs').hidden = !tabs.length || (tabs.length === 1 && tabs[0].dataset);
+  // Shared CSVs can all be reached from the selector; tabs are needed only for local files.
+  $('tabs').hidden = !tabs.length || tabs.every(tab => tab.dataset);
   const fragment = document.createDocumentFragment();
   tabs.forEach(tab => {
     const item = document.createElement('div'); item.className = 'tab-item' + (tab === active ? ' active' : ''); item.setAttribute('role', 'presentation');
-    const button = document.createElement('button'); button.textContent = tab.file.name; button.title = tab.file.name; button.id = `tab-${tab.id}`;
+    const button = document.createElement('button'); button.textContent = tab.dataset?.label || tab.file.name; button.title = tab.file.name; button.id = `tab-${tab.id}`;
     button.setAttribute('role', 'tab'); button.setAttribute('aria-selected', String(tab === active)); button.setAttribute('aria-controls', 'main'); button.tabIndex = tab === active ? 0 : -1;
     button.onclick = () => selectTab(tab);
     button.onkeydown = e => {
@@ -830,7 +859,7 @@ function openFiles(files, handles = [], {dataset = null, select = true} = {}) {
   for (const [index, file] of Array.from(files).entries()) {
     if (!limit && file.size > 50 * 1024 * 1024) { rejected++; continue; }
     const tab = {id:++nextTabId, file, handle:handles[index] || null, reloading:false, reloadError:'', worker:new Worker(workerURL), ready:false, pending:true, request:0,
-      dataset, topic:false, view:'summary', limit, encoding:'auto', delimiter:'auto', header:true, search:'', sort:-1, direction:1, page:0, result:null,
+      dataset, topic:false, combination:false, view:'summary', limit, encoding:'auto', delimiter:'auto', header:true, search:'', sort:-1, direction:1, page:0, result:null,
       schema:null, schemaNotice:'', filters:{}, filterButtons:{}, widths:{}, manualWidths:new Set(), fits:{}, fitSequence:0, generation:0, autoFit:true, hidden:new Set(), scrollTop:0, scrollLeft:0, error:'', timer:null};
     tabs.push(tab); last = tab;
     tab.worker.onmessage = ({data:r}) => {
@@ -846,12 +875,12 @@ function openFiles(files, handles = [], {dataset = null, select = true} = {}) {
           tab.filters = {}; tab.hidden.clear(); tab.widths = {}; tab.manualWidths.clear(); tab.sort = -1; tab.direction = 1; tab.page = 0; tab.scrollTop = tab.scrollLeft = 0; tab.keepView = false;
           tab.schemaNotice = (schemaChanged ? '列構成が変わったため、' : '見出しがない・空欄・重複していて列の対応を確定できないため、') + '列フィルタ・列の表示状態・列幅・並べ替えをリセットしました。全体検索と読み込み範囲は引き継いでいます。';
         }
-        tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.ready = true; query(tab, !tab.keepView); return;
+        tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.combination = hasPairSchema(r.schema); tab.ready = true; query(tab, !tab.keepView); return;
       }
       for (const column of Object.keys(tab.filters)) if (Number(column) >= r.headers.length) delete tab.filters[column];
-      tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.result = r; tab.page = r.page; tab.pending = false;
+      tab.schema = r.schema; tab.topic = hasTopicSchema(r.schema); tab.combination = hasPairSchema(r.schema); tab.result = r; tab.page = r.page; tab.pending = false;
       if (tab === active) renderActive();
-      if (tab.autoFit) { tab.autoFit = false; requestFit(tab, r.headers.map((_,i) => i).filter(i => !tab.keepView || !tab.manualWidths.has(i))); }
+      if (tab.autoFit) { tab.autoFit = false; if (!tab.combination) requestFit(tab, r.headers.map((_,i) => i).filter(i => !tab.keepView || !tab.manualWidths.has(i))); }
     };
     tab.worker.onerror = () => { tab.ready = false; tab.pending = false; tab.error = '処理を続けられませんでした。タブを閉じ、ファイルを小さくして再度開いてください。'; if (tab === active) renderActive(); };
     load(tab);
@@ -981,7 +1010,7 @@ function resizeHandle(tab, i, name) {
 function renderTable() {
   $('head').replaceChildren(); $('body').replaceChildren(); $('colgroup').replaceChildren();
   const tab = active; if (!tab || !tab.result) return;
-  const r = tab.result, summary = isSummary(tab), visible = visibleColumns(tab);
+  const r = tab.result, summary = isSummary(tab), pairs = tab.combination, visible = visibleColumns(tab);
   const tr = document.createElement('tr'), corner = document.createElement('th'); corner.scope = 'col'; corner.textContent = '#'; corner.title = '元のCSVの行番号'; tr.append(corner);
   const numberCol = document.createElement('col'); $('colgroup').append(numberCol);
   visible.forEach(i => {
@@ -1013,6 +1042,7 @@ function renderTable() {
         return;
       }
       td.textContent = displayValue(tab, i, value);
+      if ((summary && [8,18].includes(i)) || (pairs && [0,3,4].includes(i))) td.classList.add('wrapped');
       if (summary && i === 4) {
         td.classList.add('match-rate');
         const count = document.createElement('small');
